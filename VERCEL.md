@@ -2,11 +2,13 @@
 
 El repositorio está preparado como una SPA de Vite. `vercel.json` fija el build, la salida `dist`, las cabeceras HTTP y el fallback a `index.html` necesario para abrir directamente `/admin`, `/acceso/:slug` y `/hub/:slug`.
 
-## 1. Importar el repositorio
+## 1. Proyecto conectado
 
-1. En Vercel, crea un proyecto desde `flujoperfecto/FPYT`.
-2. Usa la raíz del repositorio como Root Directory.
-3. Vercel debe detectar `Vite`. La configuración versionada ya define:
+El proyecto está desplegado desde `flujoperfecto/FPYT` y publica `main` en `https://www.flujoperfecto.com`. La configuración versionada define:
+
+1. La raíz del repositorio como Root Directory.
+2. Framework `Vite`.
+3. Los siguientes valores de compilación:
    - Node.js `22.x`.
    - Build Command: `npm run build`.
    - Output Directory: `dist`.
@@ -28,20 +30,20 @@ El build falla deliberadamente si falta alguna variable `VITE_*` requerida. Camb
 
 ## 3. Configurar el origen definitivo
 
-Elige primero el origen canónico, por ejemplo `https://hub.flujoperfecto.com`, sin `/` final. El mismo origen debe configurarse en estos tres lugares:
+El origen canónico de producción es `https://www.flujoperfecto.com`, sin `/` final. El mismo origen debe configurarse en estos tres lugares:
 
 1. **Supabase Edge Functions**
 
    ```bash
-   npx supabase secrets set APP_ORIGIN=https://tu-dominio.com --project-ref bomqxagomdseekmdcsdh
+   npx supabase secrets set APP_ORIGIN=https://www.flujoperfecto.com --project-ref bomqxagomdseekmdcsdh
    ```
 
 2. **Supabase Auth → URL Configuration**
-   - Site URL: `https://tu-dominio.com`
-   - Redirect URL permitida: `https://tu-dominio.com/**`
+   - Site URL: `https://www.flujoperfecto.com`
+   - Redirect URL permitida: `https://www.flujoperfecto.com/**`
 
 3. **Cloudflare Turnstile → Hostname Management**
-   - Añade sólo el hostname, sin protocolo, puerto ni ruta.
+   - Añade `www.flujoperfecto.com`, sólo como hostname, sin protocolo, puerto ni ruta.
    - Usa un widget distinto para desarrollo y producción.
    - No autorices `vercel.app` como dominio raíz compartido.
 

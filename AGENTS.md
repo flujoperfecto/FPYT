@@ -24,7 +24,8 @@ El progreso se marca manualmente por momento y se guarda sólo en el navegador d
 - Datos reales después de limpiar fixtures: 1 tutorial, 4 capítulos, 4 recursos y 1 lead.
 - Suite pgTAP: 68 pruebas aprobadas.
 - Build Vite aprobado y `npm audit --omit=dev` sin vulnerabilidades.
-- Repositorio preparado para Vercel con Node.js 22, build validado, `vercel.json`, fallback SPA, cabeceras seguras y `.vercelignore`. Aún no se ha creado ni desplegado el proyecto en Vercel.
+- Repositorio desplegado en Vercel desde `main` con dominio canónico `https://www.flujoperfecto.com`, Node.js 22, `vercel.json`, fallback SPA, cabeceras seguras y `.vercelignore`.
+- `APP_ORIGIN` de la Edge Function está configurado en Supabase como `https://www.flujoperfecto.com`; el preflight remoto se verificó con respuesta 204 y el origen correcto el 2026-08-04.
 
 No des por permanentes estos conteos: compruébalos con `npm run supabase:verify` cuando dispongas de las variables privadas requeridas.
 
@@ -269,7 +270,7 @@ Los smoke tests crean fixtures aislados y deben limpiarlos incluso si fallan. Co
 ## 13. Riesgos y decisiones pendientes
 
 - Falta configurar las claves reales de Turnstile y las URLs de Auth para el dominio definitivo antes de producción.
-- `APP_ORIGIN` debe cambiar desde localhost al dominio publicado al desplegar.
+- `APP_ORIGIN` acepta deliberadamente un único origen exacto. Si cambia el dominio canónico, actualiza el secreto de Supabase y verifica el preflight antes de publicar el cambio.
 - La protección de contraseñas filtradas de Supabase debe habilitarse desde la configuración de Auth si el plan lo permite.
 - El progreso vive en `localStorage`; no se sincroniza entre dispositivos ni usuarios.
 - El router manual necesita fallback SPA. En Vercel ya está resuelto mediante `vercel.json`; cualquier otro hosting debe aplicar una regla equivalente hacia `index.html`.
