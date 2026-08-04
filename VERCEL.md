@@ -49,6 +49,14 @@ El origen canónico de producción es `https://www.flujoperfecto.com`, sin `/` f
 
 La validación servidor de Turnstile la realiza Supabase Auth al crear la sesión anónima; la secret key del widget debe permanecer configurada allí, nunca en el navegador.
 
+La configuración versionada usa `secret = "env(SUPABASE_AUTH_CAPTCHA_SECRET)"` en `supabase/config.toml`. Para sincronizar Auth tras crear o rotar el widget, carga esa variable sólo en el proceso y ejecuta:
+
+```bash
+npx supabase config push --project-ref bomqxagomdseekmdcsdh
+```
+
+No guardes el valor real en `.env`, Vercel ni GitHub.
+
 ## 4. Preview deployments
 
 La Edge Function acepta un único `APP_ORIGIN` exacto y Turnstile restringe hostnames. Por seguridad, los previews dinámicos de Vercel no deben reutilizar la configuración de producción.
