@@ -24,6 +24,7 @@ El progreso se marca manualmente por momento y se guarda sólo en el navegador d
 - Datos reales después de limpiar fixtures: 1 tutorial, 4 capítulos, 4 recursos y 1 lead.
 - Suite pgTAP: 68 pruebas aprobadas.
 - Build Vite aprobado y `npm audit --omit=dev` sin vulnerabilidades.
+- Repositorio preparado para Vercel con Node.js 22, build validado, `vercel.json`, fallback SPA, cabeceras seguras y `.vercelignore`. Aún no se ha creado ni desplegado el proyecto en Vercel.
 
 No des por permanentes estos conteos: compruébalos con `npm run supabase:verify` cuando dispongas de las variables privadas requeridas.
 
@@ -35,6 +36,7 @@ No des por permanentes estos conteos: compruébalos con `npm run supabase:verify
 - `@supabase/supabase-js` para Database, Auth, Storage y Edge Functions.
 - Supabase CLI para migraciones, funciones y pruebas.
 - Cloudflare Turnstile integrado en el acceso por email y el login administrativo.
+- Vercel es el hosting previsto para el frontend estático; no aloja el código de `supabase/functions/`.
 
 No existe un servidor Express ni endpoints HTTP propios. `src/api.js` es una capa de compatibilidad dentro del navegador: recibe rutas con forma `/api/...` y las traduce a operaciones directas de Supabase. No intentes buscar un backend Node para esas rutas.
 
@@ -175,6 +177,10 @@ scripts/
   verify-supabase.mjs
   smoke-access-flow.mjs
   smoke-admin-flow.mjs
+
+vercel.json         Build Vite, salida dist, cabeceras y rewrite SPA.
+.vercelignore       Excluye infraestructura y archivos locales del upload.
+VERCEL.md           Checklist de dominio, variables, Supabase y Turnstile.
 ```
 
 ## 9. Sistema visual
@@ -266,7 +272,8 @@ Los smoke tests crean fixtures aislados y deben limpiarlos incluso si fallan. Co
 - `APP_ORIGIN` debe cambiar desde localhost al dominio publicado al desplegar.
 - La protección de contraseñas filtradas de Supabase debe habilitarse desde la configuración de Auth si el plan lo permite.
 - El progreso vive en `localStorage`; no se sincroniza entre dispositivos ni usuarios.
-- El router manual no intercepta navegación SPA; el hosting definitivo debe redirigir rutas desconocidas a `index.html`.
+- El router manual necesita fallback SPA. En Vercel ya está resuelto mediante `vercel.json`; cualquier otro hosting debe aplicar una regla equivalente hacia `index.html`.
+- Los previews dinámicos de Vercel no pueden completar de forma segura los flujos protegidos con la configuración de producción: la Edge Function usa un único `APP_ORIGIN` exacto y Turnstile restringe hostnames. Para QA completo usa un origen estable y servicios de staging separados.
 - Antes de publicar, verifica políticas de privacidad, consentimiento y mecanismo de baja para comunicaciones.
 - La Edge Function se redesplegó como versión 2 el 2026-08-04 después de aplicar `20260804200000_atomic_access_attempts.sql`. En cambios futuros recuerda que `db push` sólo sincroniza SQL y que el código TypeScript requiere `npx supabase functions deploy grant-tutorial-access` por separado.
 - El directorio `server/` se eliminó el 2026-08-04: estaba vacío y podía sugerir a un futuro agente que existe un backend Node propio, contradiciendo la arquitectura descrita en §3. Si en algún momento se necesita un proceso Node server-side, créalo de nuevo con contenido real, no como placeholder.

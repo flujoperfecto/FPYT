@@ -1,0 +1,9 @@
+.claude/
+.mcp.json
+.env
+.env.*
+AGENTS.md
+data/
+scripts/
+storage/
+supabase/

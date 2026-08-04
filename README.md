@@ -21,11 +21,17 @@ Para retomar el desarrollo, decisiones de arquitectura, mapa completo de archivo
 3. Inicia la aplicación con `npm run dev`.
 4. Genera el build con `npm run build`.
 
+El build valida que existan `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` y `VITE_TURNSTILE_SITE_KEY`; así un deployment no puede publicarse silenciosamente sin su configuración mínima.
+
 Rutas principales:
 
 - `/acceso/:slug`: captura de email para contenidos protegidos.
 - `/hub/:slug`: aula interactiva con línea de tiempo y materiales.
 - `/admin`: gestión de tutoriales, momentos, recursos y suscriptores.
+
+## Desplegar en Vercel
+
+El repositorio incluye `vercel.json`, fallback SPA para rutas profundas, Node.js 22, cabeceras de seguridad y exclusiones de despliegue. Sigue el checklist completo en [`VERCEL.md`](./VERCEL.md).
 
 ## Provisionar Supabase
 
