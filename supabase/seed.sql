@@ -1,0 +1,1 @@
+-- Datos sintéticos únicamente. Los datos reales se importan mediante el script de migración.
