@@ -9,6 +9,8 @@ function PageEffects() {
   useEffect(() => {
     const root = document.documentElement;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const hero = document.querySelector('.hero');
+    let heroVisible = true;
     let scrollFrame = 0;
     let pointerFrame = 0;
 
@@ -22,12 +24,18 @@ function PageEffects() {
     };
 
     const updatePointer = event => {
-      if (reducedMotion || pointerFrame) return;
+      if (reducedMotion || pointerFrame || !heroVisible) return;
       pointerFrame = window.requestAnimationFrame(() => {
+        const horizontal = (event.clientX / window.innerWidth) - .5;
+        const vertical = (event.clientY / window.innerHeight) - .5;
         root.style.setProperty('--pointer-x', `${event.clientX}px`);
         root.style.setProperty('--pointer-y', `${event.clientY}px`);
-        root.style.setProperty('--hero-x', `${((event.clientX / window.innerWidth) - .5) * 14}px`);
-        root.style.setProperty('--hero-y', `${((event.clientY / window.innerHeight) - .5) * 10}px`);
+        root.style.setProperty('--hero-bg-x', `${horizontal * 12}px`);
+        root.style.setProperty('--hero-bg-y', `${vertical * 12}px`);
+        root.style.setProperty('--hero-mid-x', `${horizontal * 24}px`);
+        root.style.setProperty('--hero-mid-y', `${vertical * 24}px`);
+        root.style.setProperty('--hero-front-x', `${horizontal * 36}px`);
+        root.style.setProperty('--hero-front-y', `${vertical * 36}px`);
         pointerFrame = 0;
       });
     };
@@ -44,17 +52,22 @@ function PageEffects() {
         observer.unobserve(entry.target);
       });
     }, { threshold: .12, rootMargin: '0px 0px -7%' });
-    const observeNewElements = () => document.querySelectorAll('[data-reveal]:not(.reveal-ready)').forEach(reveal);
+    // Re-observe ready elements too: React StrictMode mounts effects twice in
+    // development, so the first observer can be cleaned up while the class remains.
+    const observeNewElements = () => document.querySelectorAll('[data-reveal]').forEach(reveal);
     const mutationObserver = new MutationObserver(observeNewElements);
+    const heroObserver = new IntersectionObserver(([entry]) => { heroVisible = Boolean(entry?.isIntersecting); }, { threshold: 0 });
 
     observeNewElements();
     updateScroll();
+    if (hero) heroObserver.observe(hero);
     mutationObserver.observe(document.body, { childList: true, subtree: true });
     window.addEventListener('scroll', updateScroll, { passive: true });
     window.addEventListener('resize', updateScroll);
     window.addEventListener('pointermove', updatePointer, { passive: true });
     return () => {
       observer.disconnect();
+      heroObserver.disconnect();
       mutationObserver.disconnect();
       window.removeEventListener('scroll', updateScroll);
       window.removeEventListener('resize', updateScroll);
@@ -101,18 +114,63 @@ function Hero() {
         </div>
         <div className="proof-row"><span>En español</span><span>Paso a paso</span><span>Listo para usar</span></div>
       </div>
-      <div className="hero-art reveal delay" aria-label="Universo visual de Flujo Perfecto">
+      <div className="hero-art reveal delay" aria-hidden="true">
+        <picture className="hero-visual">
+          <source media="(max-width: 680px)" srcSet="/images/flujo-oracle-mobile.webp" />
+          <img src="/images/flujo-oracle-desktop.webp" alt="" width="1920" height="1080" fetchPriority="high" />
+        </picture>
+        <div className="hero-geometry">
+          <svg viewBox="0 0 900 900" focusable="false"><circle cx="540" cy="410" r="218" /><circle cx="540" cy="410" r="302" /><path d="M238 410h604M540 108v604M326 196l428 428M754 196 326 624" /><polygon points="540,153 767,540 313,540" /></svg>
+        </div>
+        <div className="hero-veil"><i /><i /><i /></div>
         <div className="art-label top">FLUJO / 001</div>
-        <div className="art-label bottom">CONOCIMIENTO QUE SE EJECUTA</div>
+        <div className="art-label bottom">ORÁCULO VIVO / CONOCIMIENTO QUE SE EJECUTA</div>
         <div className="signal"><i /><span>SEÑAL ACTIVA</span></div>
       </div>
     </section>
   );
 }
 
-function Ticker() {
-  const topics = ['CLAUDE CODE', 'PROMPTS', 'VIBE CODING', 'AGENTES DE IA', 'AUTOMATIZACIONES', 'NEGOCIOS DIGITALES'];
-  return <div className="ticker" aria-label="Temas del canal"><div>{[...topics, ...topics].map((t, i) => <span key={`${t}-${i}`}>{t}<b>✦</b></span>)}</div></div>;
+const fallbackTopics = ['CLAUDE CODE', 'PROMPTS', 'VIBE CODING', 'AGENTES DE IA', 'AUTOMATIZACIONES', 'NEGOCIOS DIGITALES'];
+
+function formatEditionDate(value) {
+  if (!value) return 'RESERVA EDITORIAL';
+  return new Intl.DateTimeFormat('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' }).format(new Date(`${value}T12:00:00Z`)).replace('.', '').toUpperCase();
+}
+
+function categoryLabel(value = '') {
+  return ({ automatizacion: 'AUTOMATIZACIÓN', investigacion: 'INVESTIGACIÓN' }[value] || value).toUpperCase();
+}
+
+function AiNewsTicker({ onOpen }) {
+  const [edition, setEdition] = useState(null);
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    api('/api/news').then(result => { if (active) setEdition(result); }).catch(() => { if (active) setEdition(null); });
+    return () => { active = false; };
+  }, []);
+
+  const isFresh = Boolean(edition?.items?.length === 4 && Date.now() - Date.parse(edition.publishedAt) <= 72 * 60 * 60 * 1000);
+  const items = isFresh ? edition.items : fallbackTopics.map((headline, index) => ({ id: `fallback-${index}`, headline, fallback: true }));
+  const date = isFresh ? formatEditionDate(edition.editionDate) : 'RESERVA EDITORIAL';
+
+  const renderItem = (item, clone = false) => {
+    const content = <><span className="news-category">{item.fallback ? 'TEMA' : categoryLabel(item.category)}</span><strong>{item.headline}</strong>{!item.fallback && <small>{item.primarySource.name}</small>}<b aria-hidden="true">✦</b></>;
+    if (clone || item.fallback) return <span className="news-ticker-item" key={`${clone ? 'clone' : 'fallback'}-${item.id}`}>{content}</span>;
+    return <button className="news-ticker-item" key={item.id} onClick={() => onOpen(item)} aria-label={`Abrir noticia: ${item.headline}`}>{content}</button>;
+  };
+
+  return <section className={`ai-news-ticker${paused ? ' is-paused' : ''}`} aria-label="Pulso IA, noticias destacadas del día">
+    <div className="news-ticker-head"><span><i /> PULSO IA</span><time dateTime={isFresh ? edition.editionDate : undefined}>{date}</time><button type="button" aria-pressed={paused} onClick={() => setPaused(value => !value)}>{paused ? 'Reanudar' : 'Pausar'} <b aria-hidden="true">{paused ? '▶' : 'Ⅱ'}</b></button></div>
+    <div className="news-ticker-lane">
+      <div className="news-ticker-track">
+        <div className="news-ticker-group" role="list">{items.map(item => <div role="listitem" key={item.id}>{renderItem(item)}</div>)}</div>
+        <div className="news-ticker-group news-ticker-clone" aria-hidden="true">{items.map(item => <div key={item.id}>{renderItem(item, true)}</div>)}</div>
+      </div>
+    </div>
+  </section>;
 }
 
 function Library() {
@@ -218,7 +276,7 @@ function Method() {
 }
 
 function FinalCta() {
-  return <section className="final-cta"><div className="shell" data-reveal><p>LA PRÓXIMA IDEA NO SE CONSTRUYE SOLA</p><h2>No mires la revolución.<br /><em>Construye dentro de ella.</em></h2><a className="button light" href={channelUrl} target="_blank" rel="noreferrer">Unirme al canal <Arrow /></a></div></section>;
+  return <section className="final-cta"><div className="cta-portal" aria-hidden="true"><i /><i /><i /><Mark /></div><div className="shell" data-reveal><p>LA PRÓXIMA IDEA NO SE CONSTRUYE SOLA</p><h2>No mires la revolución.<br /><em>Construye dentro de ella.</em></h2><a className="button light" href={channelUrl} target="_blank" rel="noreferrer">Unirme al canal <Arrow /></a></div></section>;
 }
 
 function Footer() {
@@ -279,7 +337,49 @@ function ResourceDrawer({ item, onClose }) {
   </div>;
 }
 
+function NewsDrawer({ item, onClose }) {
+  const drawerRef = useRef(null);
+  const closeButtonRef = useRef(null);
+  useEffect(() => {
+    if (!item) return;
+    const previousFocus = document.activeElement;
+    const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+    const onKey = event => {
+      if (event.key === 'Escape') { onClose(); return; }
+      if (event.key !== 'Tab' || !drawerRef.current) return;
+      const focusable = [...drawerRef.current.querySelectorAll('button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')];
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    document.body.classList.add('drawer-open');
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.body.classList.remove('drawer-open');
+      window.removeEventListener('keydown', onKey);
+      if (previousFocus instanceof HTMLElement) previousFocus.focus();
+    };
+  }, [item, onClose]);
+  if (!item) return null;
+  const sources = item.sources?.length ? item.sources : [item.primarySource];
+  return <div className="drawer-wrap news-drawer-wrap">
+    <button className="drawer-scrim" onClick={onClose} aria-label="Cerrar noticia" tabIndex={-1} />
+    <aside className="drawer news-drawer" ref={drawerRef} role="dialog" aria-modal="true" aria-labelledby="news-drawer-title">
+      <div className="drawer-head"><span className="type">PULSO IA / {categoryLabel(item.category)}</span><button ref={closeButtonRef} onClick={onClose} aria-label="Cerrar">×</button></div>
+      <small>{new Intl.DateTimeFormat('es-CL', { dateStyle: 'long' }).format(new Date(item.primarySource.publishedAt))}</small>
+      <h2 id="news-drawer-title">{item.headline}</h2>
+      <p className="news-summary">{item.summary}</p>
+      <section className="news-why"><span>POR QUÉ IMPORTA</span><p>{item.whyItMatters}</p></section>
+      <div className="news-sources"><span>FUENTES</span>{sources.map((source, index) => <a href={source.url} target="_blank" rel="noreferrer" key={`${source.url}-${index}`}><i>{String(index + 1).padStart(2, '0')}</i><strong>{source.name}</strong><small>{source.title || 'Abrir publicación original'}</small><b aria-hidden="true">↗</b></a>)}</div>
+      <p className="news-disclaimer">Síntesis editorial generada a partir de las fuentes enlazadas. Revisa la publicación original antes de tomar decisiones críticas.</p>
+    </aside>
+  </div>;
+}
+
 export default function App() {
   const [selected, setSelected] = useState(null);
-  return <><PageEffects /><Header /><main><Hero /><Ticker /><Library /><Classroom onOpen={setSelected} /><Method /><FinalCta /></main><Footer /><ResourceDrawer item={selected} onClose={() => setSelected(null)} /></>;
+  const [selectedNews, setSelectedNews] = useState(null);
+  return <><PageEffects /><Header /><main><Hero /><AiNewsTicker onOpen={setSelectedNews} /><Library /><Classroom onOpen={setSelected} /><Method /><FinalCta /></main><Footer /><ResourceDrawer item={selected} onClose={() => setSelected(null)} /><NewsDrawer item={selectedNews} onClose={() => setSelectedNews(null)} /></>;
 }

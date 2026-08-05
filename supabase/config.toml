@@ -423,3 +423,11 @@ entrypoint = "./functions/grant-tutorial-access/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/grant-tutorial-access/*.html" ]
+
+[functions.refresh-ai-news]
+enabled = true
+# Server-to-server only: the function authenticates the dedicated x-cron-secret
+# against AI_NEWS_CRON_SECRET and never accepts a browser publishable key.
+verify_jwt = false
+import_map = "./functions/refresh-ai-news/deno.json"
+entrypoint = "./functions/refresh-ai-news/index.ts"

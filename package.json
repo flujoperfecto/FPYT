@@ -10,11 +10,16 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test:ai-news": "node --experimental-strip-types scripts/test-ai-news.mjs",
     "supabase:migrate-data": "node scripts/migrate-to-supabase.mjs",
     "supabase:bootstrap-admin": "node scripts/bootstrap-admin.mjs",
     "supabase:verify": "node scripts/verify-supabase.mjs",
     "supabase:smoke-access": "node scripts/smoke-access-flow.mjs",
     "supabase:smoke-admin": "node scripts/smoke-admin-flow.mjs",
+    "supabase:smoke-news": "node scripts/smoke-ai-news.mjs",
+    "supabase:run-news-now": "supabase db query --linked --file supabase/cron/run_ai_news_now.sql",
+    "supabase:activate-news-cron": "supabase db query --linked --file supabase/cron/activate_ai_news_cron.sql",
+    "supabase:disable-news-cron": "supabase db query --linked --file supabase/cron/disable_ai_news_cron.sql",
     "supabase:test-db": "supabase test db --local"
   },
   "dependencies": {

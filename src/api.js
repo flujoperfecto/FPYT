@@ -3,6 +3,7 @@ import { requireSupabase } from './supabase.js';
 const tutorialFields = 'id,title,slug,description,youtube_url,cover_url,cover_storage_path,status,access_mode,chapter_count,resource_count,created_at,updated_at';
 const chapterFields = 'id,tutorial_id,position,title,start_seconds,description,created_at,updated_at';
 const resourceFields = 'id,chapter_id,position,type,title,description,content,url,storage_path,original_name,created_at,updated_at';
+const newsItemFields = 'id,edition_id,position,category,headline,summary,why_it_matters,primary_source_name,primary_source_url,source_published_at,sources';
 
 export const RESOURCE_LABELS = { prompt: 'Prompt', instruction: 'Instrucción', skill: 'Skill', link: 'Enlace', file: 'Archivo' };
 
@@ -68,6 +69,57 @@ function mapTutorial(row, chapterRows = [], resourceRows = []) {
   return {
     ...tutorialSummary(row),
     chapters: chapterRows.filter(item => item.tutorial_id === row.id).sort((a, b) => a.position - b.position).map(item => mapChapter(item, resourceRows)),
+  };
+}
+
+function mapNewsItem(row) {
+  return {
+    id: row.id,
+    position: row.position,
+    category: row.category,
+    headline: row.headline,
+    summary: row.summary,
+    whyItMatters: row.why_it_matters,
+    primarySource: {
+      name: row.primary_source_name,
+      url: row.primary_source_url,
+      publishedAt: row.source_published_at,
+    },
+    sources: Array.isArray(row.sources) ? row.sources.map(source => ({
+      name: String(source.name || row.primary_source_name),
+      url: String(source.url || row.primary_source_url),
+      title: String(source.title || row.headline),
+      publishedAt: String(source.published_at || row.source_published_at),
+    })) : [],
+  };
+}
+
+async function latestAiNews() {
+  const client = requireSupabase();
+  const { data: edition, error: editionError } = await client
+    .from('ai_news_editions')
+    .select('id,edition_date,published_at,model,candidate_count')
+    .not('published_at', 'is', null)
+    .order('edition_date', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  throwIfError(editionError);
+  if (!edition) return null;
+
+  const { data: items, error: itemError } = await client
+    .from('ai_news_items')
+    .select(newsItemFields)
+    .eq('edition_id', edition.id)
+    .order('position');
+  throwIfError(itemError);
+  if (items.length !== 4) return null;
+  return {
+    id: edition.id,
+    editionDate: edition.edition_date,
+    publishedAt: edition.published_at,
+    model: edition.model,
+    candidateCount: edition.candidate_count,
+    items: items.map(mapNewsItem),
   };
 }
 
@@ -586,6 +638,7 @@ export async function downloadResource(item) {
 export async function api(path, options = {}) {
   const method = String(options.method || 'GET').toUpperCase();
   const body = options.body || {};
+  if (method === 'GET' && path === '/api/news') return latestAiNews();
   if (method === 'GET' && path === '/api/videos') return publishedTutorials();
   if (method === 'GET' && /^\/api\/videos\/[^/]+$/.test(path)) return tutorialBySlug(decodeURIComponent(path.split('/').pop()));
   if (method === 'GET' && /^\/api\/hub\/[^/]+$/.test(path)) return hubTutorial(decodeURIComponent(path.split('/').pop()));

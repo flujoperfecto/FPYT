@@ -1,6 +1,6 @@
 # Flujo Perfecto
 
-Hub de tutoriales de YouTube con capítulos, prompts, instrucciones, skills, enlaces y archivos descargables. La aplicación React usa Supabase directamente para Database, Auth y Storage; la concesión de acceso por email pasa por una Edge Function.
+Hub de tutoriales de YouTube con capítulos, prompts, instrucciones, skills, enlaces y archivos descargables. La aplicación React usa Supabase directamente para Database, Auth y Storage; la concesión de acceso por email y la edición diaria de noticias pasan por Edge Functions.
 
 Para retomar el desarrollo, decisiones de arquitectura, mapa completo de archivos, invariantes de seguridad y checklist de entrega, consulta [`AGENTS.md`](./AGENTS.md).
 
@@ -13,6 +13,27 @@ Para retomar el desarrollo, decisiones de arquitectura, mapa completo de archivo
 - El bucket `tutorial-materials` es privado y las descargas usan URLs firmadas de cinco minutos.
 - El progreso se conserva en el navegador del suscriptor.
 - Turnstile protege el alta anónima y el login administrativo cuando Auth está configurado con una clave secreta real de Cloudflare.
+- `Pulso IA` muestra la última edición válida de cuatro noticias. Si supera 72 horas, la portada recupera sus temas editoriales de reserva.
+
+## Pulso IA
+
+La portada obtiene `GET /api/news` a través de `src/api.js`. Ese endpoint interno lee exclusivamente la última edición publicada gracias a RLS. El ticker puede pausarse, se detiene al recibir foco o puntero y, en móvil, se convierte en un carrusel manual con `scroll-snap`. Cada noticia abre un panel accesible con resumen, utilidad práctica y enlaces a todas sus fuentes.
+
+La Edge Function `refresh-ai-news` consulta una lista versionada de feeds oficiales y periodísticos, deduplica hasta 30 candidatos recientes y pide a `deepseek-v4-pro` cuatro noticias en español. Sólo después de validar completamente la respuesta llama a la RPC transaccional `publish_ai_news_edition`; ante cualquier fallo conserva la edición anterior.
+
+Los secretos `DEEPSEEK_API_KEY` y `AI_NEWS_CRON_SECRET` pertenecen únicamente a Supabase. No deben configurarse en Vercel ni utilizar el prefijo `VITE_`. La ejecución diaria está prevista a las `11:30 UTC` y debe activarse únicamente después de una ejecución manual verificada:
+
+```bash
+npm run supabase:run-news-now
+npm run supabase:smoke-news
+npm run supabase:activate-news-cron
+```
+
+Para detener inmediatamente nuevas publicaciones sin perder la última edición válida:
+
+```bash
+npm run supabase:disable-news-cron
+```
 
 ## Configuración local
 
@@ -58,7 +79,7 @@ npm run supabase:bootstrap-admin
 
 ## Pruebas de seguridad
 
-`supabase/tests/hub_security_test.sql` contiene 68 comprobaciones de esquema, privilegios, RLS y Storage. Puede ejecutarse contra el proyecto enlazado con Docker Desktop activo:
+`supabase/tests/hub_security_test.sql` contiene 97 comprobaciones de esquema, privilegios, RLS, Storage y Pulso IA. Puede ejecutarse contra el proyecto enlazado con Docker Desktop activo:
 
 ```bash
 npx supabase test db --linked
@@ -69,6 +90,12 @@ O con Docker Desktop activo y la pila local iniciada:
 ```bash
 npx supabase start
 npm run supabase:test-db
+```
+
+Las pruebas unitarias del recolector y validador RSS/Atom/DeepSeek no necesitan secretos ni Docker:
+
+```bash
+npm run test:ai-news
 ```
 
 ## Migrar los datos actuales

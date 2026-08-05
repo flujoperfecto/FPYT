@@ -19,11 +19,14 @@ El progreso se marca manualmente por momento y se guarda sólo en el navegador d
 
 - Proyecto Supabase: `FlujoPerfecto`.
 - Project ref: `bomqxagomdseekmdcsdh`.
-- Migraciones remotas aplicadas hasta `20260804200000_atomic_access_attempts.sql` (agrega `check_and_record_access_attempt`, ver §7). Aplicada y reverificada con `npx supabase test db --linked` (68/68 pruebas en verde).
-- Edge Function `grant-tutorial-access` desplegada como versión 2 el 2026-08-04. El código remoto ya llama a `check_and_record_access_attempt`; la migración y la función están sincronizadas.
+- Migraciones remotas aplicadas hasta `20260805021112_fix_ai_news_publisher.sql`. Las dos últimas incorporan Pulso IA y corrigen una ambigüedad interna del publicador transaccional.
+- Edge Function `grant-tutorial-access` desplegada como versión 5 el 2026-08-04. El código remoto ya llama a `check_and_record_access_attempt`; la migración y la función están sincronizadas.
+- Edge Function `refresh-ai-news` desplegada el 2026-08-04, autenticada por una clave interna dedicada y conectada a Vault mediante `pg_net`. La URL y la clave de Cron ya existen en Vault; `DEEPSEEK_API_KEY` aún no está configurada y el Cron permanece desactivado deliberadamente hasta completar una ejecución manual válida.
 - Datos reales después de limpiar fixtures: 1 tutorial, 4 capítulos, 4 recursos y 1 lead.
-- Suite pgTAP: 68 pruebas aprobadas.
+- Suite pgTAP: 97/97 pruebas aprobadas al ejecutar el SQL directamente contra el proyecto enlazado. `supabase test db --linked` requiere que Docker Desktop esté activo y no estuvo disponible en la última verificación.
+- Pruebas unitarias de Pulso IA: 7/7 aprobadas (RSS, Atom, límites, timeout, deduplicación y validación de DeepSeek).
 - Build Vite aprobado y `npm audit --omit=dev` sin vulnerabilidades.
+- Lighthouse móvil sobre el build de producción: rendimiento 91, accesibilidad 96 y CLS 0 (2026-08-04).
 - Repositorio desplegado en Vercel desde `main` con dominio canónico `https://www.flujoperfecto.com`, Node.js 22, `vercel.json`, fallback SPA, cabeceras seguras y `.vercelignore`.
 - `APP_ORIGIN` de la Edge Function está configurado en Supabase como `https://www.flujoperfecto.com`; el preflight remoto se verificó con respuesta 204 y el origen correcto el 2026-08-04.
 - Cloudflare Turnstile tiene un widget de producción llamado `Flujo Perfecto Producción`, restringido a `www.flujoperfecto.com` y en modo Managed. La Site Key real está en Vercel y la Secret Key real sólo en Supabase Auth; ambas se configuraron el 2026-08-04 y nunca deben copiarse al repositorio.
@@ -48,10 +51,17 @@ El enrutamiento también es intencionalmente sencillo: `src/Router.jsx` interpre
 ```text
 Navegador React
   ├─ consultas públicas y de administrador ──> Supabase Database + RLS
+  ├─ última edición de Pulso IA ──────────────> Supabase Database + RLS
   ├─ sesiones ───────────────────────────────> Supabase Auth
   ├─ archivos y portadas ────────────────────> Supabase Storage
   └─ concesión de acceso por email ──────────> Edge Function
                                                    └─ RPC transaccional
+
+Supabase Cron + Vault
+  └─ Edge Function refresh-ai-news
+       ├─ feeds RSS/Atom oficiales y periodísticos
+       ├─ DeepSeek para selección y resumen
+       └─ RPC publish_ai_news_edition
 ```
 
 ## 4. Rutas y flujos
@@ -61,6 +71,7 @@ Navegador React
 - `/` y hashes `#inicio`, `#biblioteca`, `#aula`, `#metodo`: landing principal.
 - La biblioteca obtiene tutoriales publicados desde Supabase.
 - La sección aula de la portada es una demostración editorial construida con datos locales de `src/data.js`.
+- La portada muestra la última edición publicada de `Pulso IA`. Si no existe o tiene más de 72 horas, usa los temas genéricos locales como reserva.
 
 ### Acceso de suscriptores
 
@@ -99,6 +110,8 @@ Tablas públicas:
 - `leads`: email normalizado, nombre, consentimiento y tutorial.
 - `tutorial_access`: relación entre usuario autenticado, tutorial y lead.
 - `access_attempts`: registro temporal para limitar concesiones de acceso.
+- `ai_news_editions`: edición diaria, modelo, cantidad de candidatos, publicación y metadatos de generación.
+- `ai_news_items`: cuatro noticias ordenadas con resumen, utilidad, fuente principal y fuentes adicionales.
 
 Relaciones principales:
 
@@ -132,6 +145,9 @@ Al eliminar contenido, limpia también sus objetos de Storage. `src/api.js` ya i
 - Los RPCs `reorder_chapters` y `reorder_resources` son `SECURITY INVOKER`, exigen administrador y validan que se suministre cada hijo exactamente una vez.
 - Las claves `SUPABASE_SECRET_KEY`, contraseñas administrativas y secretos de Turnstile nunca llevan prefijo `VITE_` ni se guardan en el repositorio.
 - La Edge Function acepta únicamente `APP_ORIGIN` como origen CORS.
+- `refresh-ai-news` no confía en JWT públicos: exige `x-cron-secret`, compara la clave en tiempo constante y sólo escribe mediante `service_role` después de validar la edición completa.
+- `publish_ai_news_edition` es `SECURITY INVOKER`, sólo puede ejecutarla `service_role`, exige exactamente cuatro posiciones válidas y reemplaza una fecha de forma atómica e idempotente.
+- `anon` y `authenticated` sólo pueden leer ediciones publicadas; ningún cliente puede escribir noticias.
 - El honeypot `website`, el consentimiento y el límite de 10 intentos por hora son deliberados. El conteo y registro del intento se hacen atómicamente en `check_and_record_access_attempt` (bloqueo consultivo por `user_id`) para evitar una condición de carrera entre solicitudes concurrentes de la misma sesión anónima.
 
 Toda modificación de esquema debe hacerse con una migración nueva generada por Supabase CLI. No edites migraciones que ya estén aplicadas en remoto.
@@ -151,6 +167,7 @@ src/
                       centralizados en AdminPage, los subcomponentes son de presentación.
   Router.jsx          Enrutamiento por pathname.
   api.js              Capa de acceso a Supabase y operaciones de dominio.
+                      Implementa también GET /api/news para la última edición pública.
                       También exporta RESOURCE_LABELS (mapa de tipo de recurso a
                       etiqueta) y copyText (copiar con fallback de <textarea>),
                       compartidos por AdminPage.jsx, HubPage.jsx y App.jsx para
@@ -167,10 +184,14 @@ public/images/
   flujo-hero.webp          Arte principal greco-tecnológico.
   flujo-library.webp       Arte de biblioteca/acceso.
   flujo-classroom.webp     Arte del aula y portada por defecto.
+  flujo-oracle-desktop.webp  Hero Oráculo Vivo 1920×1080.
+  flujo-oracle-mobile.webp   Composición móvil Oráculo Vivo 1080×1350.
 
 supabase/
   migrations/         Historial inmutable del esquema.
   functions/grant-tutorial-access/index.ts
+  functions/refresh-ai-news/  Recolección RSS/Atom, DeepSeek, validación y publicación.
+  cron/               Ejecución manual, activación y desactivación del Cron diario.
   tests/hub_security_test.sql
   seed.sql
 
@@ -180,6 +201,8 @@ scripts/
   verify-supabase.mjs
   smoke-access-flow.mjs
   smoke-admin-flow.mjs
+  smoke-ai-news.mjs
+  test-ai-news.mjs
 
 vercel.json         Build Vite, salida dist, cabeceras y rewrite SPA.
 .vercelignore       Excluye infraestructura y archivos locales del upload.
@@ -196,6 +219,8 @@ La marca combina Grecia clásica con tecnología/IA:
 - Bordes finos, retículas, numeración monoespaciada y brillo controlado.
 - La sección Método usa iconos SVG propios, inscripciones griegas, columnas, sello Φ y animaciones compatibles con `prefers-reduced-motion`.
 - La landing incorpora una capa de interacción en `PageEffects`: progreso de lectura, halo de puntero, parallax moderado del hero y revelado progresivo mediante `IntersectionObserver`. Sólo se activa visualmente; no condiciona el acceso al contenido y respeta `prefers-reduced-motion`.
+- El hero `Oráculo Vivo` usa composiciones separadas de escritorio y móvil, tres planos CSS/SVG y desplazamientos máximos de 6/12/18 px mediante `requestAnimationFrame`; deja de actualizarse cuando sale del viewport.
+- `AiNewsTicker` reserva su altura, puede pausarse y abre `NewsDrawer` con trampa de foco, cierre por Escape y devolución del foco. En móvil no se anima automáticamente.
 - La cuadrícula de Biblioteca es fluida y permite que un único tutorial utilice todo el ancho disponible. El panel lateral de recursos atrapa el foco, responde a Escape y devuelve el foco al control que lo abrió.
 
 No reemplaces esta identidad por tarjetas genéricas, degradados arbitrarios o iconos de librería sin adaptación. Reutiliza `BrandMark.jsx` para el logo; no dupliques su marcado.
@@ -221,6 +246,13 @@ SUPABASE_SECRET_KEY
 ADMIN_EMAIL
 ADMIN_PASSWORD
 APP_ORIGIN
+```
+
+Secretos exclusivos de Supabase Edge Functions, nunca de Vercel:
+
+```text
+DEEPSEEK_API_KEY
+AI_NEWS_CRON_SECRET
 ```
 
 Usa `.env.example` como referencia. La `.env` local no debe contener claves administrativas si no son necesarias. Los scripts Node no cargan `.env` automáticamente: las variables privadas deben existir en el proceso que los ejecuta.
@@ -252,6 +284,11 @@ Verificación funcional, con las variables privadas cargadas sólo en el proceso
 npm run supabase:verify
 npm run supabase:smoke-access
 npm run supabase:smoke-admin
+npm run test:ai-news
+npm run supabase:run-news-now
+npm run supabase:smoke-news
+npm run supabase:activate-news-cron
+npm run supabase:disable-news-cron
 ```
 
 Los smoke tests crean fixtures aislados y deben limpiarlos incluso si fallan. Comprueba los conteos reales al terminar.
@@ -278,6 +315,8 @@ Los smoke tests crean fixtures aislados y deben limpiarlos incluso si fallan. Co
 - El router manual necesita fallback SPA. En Vercel ya está resuelto mediante `vercel.json`; cualquier otro hosting debe aplicar una regla equivalente hacia `index.html`.
 - Los previews dinámicos de Vercel no pueden completar de forma segura los flujos protegidos con la configuración de producción: la Edge Function usa un único `APP_ORIGIN` exacto y Turnstile restringe hostnames. Para QA completo usa un origen estable y servicios de staging separados.
 - Antes de publicar, verifica políticas de privacidad, consentimiento y mecanismo de baja para comunicaciones.
-- La Edge Function se redesplegó como versión 2 el 2026-08-04 después de aplicar `20260804200000_atomic_access_attempts.sql`. En cambios futuros recuerda que `db push` sólo sincroniza SQL y que el código TypeScript requiere `npx supabase functions deploy grant-tutorial-access` por separado.
+- La Edge Function `grant-tutorial-access` quedó desplegada como versión 5 el 2026-08-04 después de aplicar `20260804200000_atomic_access_attempts.sql`. En cambios futuros recuerda que `db push` sólo sincroniza SQL y que el código TypeScript requiere `npx supabase functions deploy grant-tutorial-access` por separado.
 - El directorio `server/` se eliminó el 2026-08-04: estaba vacío y podía sugerir a un futuro agente que existe un backend Node propio, contradiciendo la arquitectura descrita en §3. Si en algún momento se necesita un proceso Node server-side, créalo de nuevo con contenido real, no como placeholder.
 - Las versiones de `react`, `react-dom`, `vite` y `@vitejs/plugin-react` en `package.json` se fijaron a las versiones instaladas (antes usaban `"latest"`) el 2026-08-04, para que `npm install` sea reproducible entre máquinas y no arrastre un mayor sin aviso. Súbelas deliberadamente cuando quieras actualizar, revisando notas de cambios.
+- Pulso IA conserva la última edición cuando una fuente o DeepSeek falla. Su Cron debe permanecer desactivado mientras falte `DEEPSEEK_API_KEY`; después de cargarla directamente en Supabase, ejecuta `supabase:run-news-now`, confirma cuatro filas públicas con `supabase:smoke-news` y sólo entonces activa `supabase:activate-news-cron`.
+- La lista versionada de feeds conserva únicamente endpoints estables verificados. Anthropic y Meta figuran como pendientes en el código porque no publican actualmente un RSS/Atom oficial estable; no los sustituyas por agregadores de terceros sin una decisión editorial explícita.
