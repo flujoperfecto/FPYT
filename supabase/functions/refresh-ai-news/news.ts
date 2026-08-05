@@ -1,6 +1,24 @@
 export const SOURCE_REGISTRY_VERSION = "2026-08-05"
 export const MAX_FEED_BYTES = 1_000_000
 export const FEED_TIMEOUT_MS = 7_000
+export const MODEL_CANDIDATE_LIMIT = 16
+
+export async function withAbortTimeout<T>(
+  task: (signal: AbortSignal) => Promise<T>,
+  timeoutMs: number,
+  errorCode = "operation_timeout",
+) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(errorCode), timeoutMs)
+  try {
+    return await task(controller.signal)
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error(errorCode)
+    throw error
+  } finally {
+    clearTimeout(timeout)
+  }
+}
 
 export type FeedSource = {
   id: string
@@ -202,12 +220,34 @@ export function filterAndDeduplicate(
 }
 
 export async function assignCandidateIds(entries: Omit<NewsCandidate, "id">[]) {
-  const encoder = new TextEncoder()
-  return Promise.all(entries.map(async entry => {
-    const digest = await crypto.subtle.digest("SHA-256", encoder.encode(entry.url))
-    const id = [...new Uint8Array(digest)].slice(0, 8).map(byte => byte.toString(16).padStart(2, "0")).join("")
-    return { ...entry, id: `news_${id}` }
+  return entries.map((entry, index) => ({
+    ...entry,
+    id: `c${String(index + 1).padStart(2, "0")}`,
   }))
+}
+
+export function shortlistCandidates(
+  candidates: Omit<NewsCandidate, "id">[],
+  limit = MODEL_CANDIDATE_LIMIT,
+) {
+  const selected: Omit<NewsCandidate, "id">[] = []
+  const selectedUrls = new Set<string>()
+  const representedSources = new Set<string>()
+
+  for (const candidate of candidates) {
+    if (selected.length >= limit) break
+    if (representedSources.has(candidate.sourceId)) continue
+    selected.push(candidate)
+    selectedUrls.add(candidate.url)
+    representedSources.add(candidate.sourceId)
+  }
+  for (const candidate of candidates) {
+    if (selected.length >= limit) break
+    if (selectedUrls.has(candidate.url)) continue
+    selected.push(candidate)
+    selectedUrls.add(candidate.url)
+  }
+  return selected
 }
 
 export type ModelSelection = {

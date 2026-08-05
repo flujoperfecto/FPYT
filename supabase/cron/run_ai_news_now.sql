@@ -7,7 +7,8 @@ select net.http_post(
   body := jsonb_build_object(
     'scheduled_at', now(),
     'trigger', 'manual'
-  )
+  ),
+  timeout_milliseconds := 145000
 ) as request_id
 from (
   select

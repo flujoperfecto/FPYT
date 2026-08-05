@@ -17,7 +17,8 @@ begin
           'Content-Type', 'application/json',
           'x-cron-secret', secrets.cron_secret
         ),
-        body := jsonb_build_object('scheduled_at', now())
+        body := jsonb_build_object('scheduled_at', now()),
+        timeout_milliseconds := 145000
       )
       from (
         select

@@ -4,7 +4,9 @@ import {
   filterAndDeduplicate,
   parseFeed,
   publishValidatedSelection,
+  shortlistCandidates,
   validateModelSelection,
+  withAbortTimeout,
 } from '../supabase/functions/refresh-ai-news/news.ts';
 
 const source = { id: 'test', name: 'Fuente', url: 'https://example.com/feed', kind: 'official' };
@@ -60,4 +62,19 @@ let publications = 0;
 await assert.rejects(publishValidatedSelection({ items: [] }, candidates, async () => { publications += 1; }));
 assert.equal(publications, 0);
 
-console.log('Pulso IA function tests: 7/7 OK');
+await assert.rejects(
+  withAbortTimeout(signal => new Promise((_resolve, reject) => {
+    signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+  }), 5, 'deepseek_timeout'),
+  /deepseek_timeout/,
+);
+
+const diverseShortlist = shortlistCandidates([
+  ...Array.from({ length: 8 }, (_, index) => ({ ...base, sourceId: 'repeated', title: `Repeated ${index}`, url: `https://example.com/repeated-${index}` })),
+  { ...base, sourceId: 'second', title: 'Second source', url: 'https://example.com/second' },
+  { ...base, sourceId: 'third', title: 'Third source', url: 'https://example.com/third' },
+], 4);
+assert.equal(diverseShortlist.length, 4);
+assert.deepEqual(diverseShortlist.slice(0, 3).map(item => item.sourceId), ['repeated', 'second', 'third']);
+
+console.log('Pulso IA function tests: 9/9 OK');

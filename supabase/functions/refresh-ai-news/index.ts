@@ -2,12 +2,15 @@ import "@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "@supabase/supabase-js"
 import {
   ACTIVE_FEEDS,
+  MODEL_CANDIDATE_LIMIT,
   SOURCE_REGISTRY_VERSION,
   assignCandidateIds,
   fetchFeed,
   filterAndDeduplicate,
   publishValidatedSelection,
+  shortlistCandidates,
   validateModelSelection,
+  withAbortTimeout,
   type NewsCandidate,
 } from "./news.ts"
 
@@ -15,6 +18,8 @@ const DEEPSEEK_MODEL = "deepseek-v4-pro"
 const MIN_ACTIVE_SOURCES = 8
 const MIN_OFFICIAL_SOURCES = 5
 const MIN_MEDIA_SOURCES = 2
+const DEEPSEEK_TOTAL_TIMEOUT_MS = 110_000
+const DEEPSEEK_ATTEMPT_TIMEOUT_MS = 105_000
 
 function secretKey() {
   const current = Deno.env.get("SUPABASE_SECRET_KEYS")
@@ -39,57 +44,101 @@ async function equalSecrets(left: string, right: string) {
   return difference === 0
 }
 
-function deepSeekPrompt(candidates: NewsCandidate[]) {
-  return `Eres el editor de Pulso IA para una audiencia hispanohablante de creadores, builders y personas que automatizan con IA.
-Selecciona exactamente cuatro noticias útiles y actuales. Prioriza aplicación práctica, actualidad, confiabilidad, corroboración y diversidad. No selecciones más de dos noticias de una misma categoría.
-Categorías permitidas: modelos, agentes, herramientas, automatizacion, negocio, investigacion, seguridad, regulacion.
-No inventes identificadores, enlaces, hechos ni fuentes. Usa supportingCandidateIds sólo cuando otra candidata corrobore realmente la misma noticia. Escribe en español y no copies el texto fuente.
-Devuelve únicamente un objeto JSON con esta forma:
-{"items":[{"candidateId":"news_...","supportingCandidateIds":[],"category":"herramientas","headline":"Titular en español","summary":"Resumen de 2 o 3 frases","whyItMatters":"Por qué importa de forma concreta"}]}
+function deepSeekPrompt(candidates: NewsCandidate[], isRetry = false) {
+  return `Actúa como editor jefe de Pulso IA para creadores, builders y especialistas en automatización.
 
-CANDIDATAS JSON:
+TAREA
+Elige exactamente 4 noticias distintas de CANDIDATAS_JSON. Ordénalas por utilidad práctica e impacto. Evalúa internamente actualidad, fiabilidad de la fuente, posibilidad de aplicación, diversidad y corroboración.
+
+CONTRATO JSON OBLIGATORIO
+Devuelve sólo este objeto JSON, sin Markdown, comentarios ni claves adicionales:
+{"items":[{"candidateId":"c01","supportingCandidateIds":[],"category":"herramientas","headline":"Titular claro en español","summary":"Dos frases factuales en español.","whyItMatters":"Una consecuencia práctica y concreta para la audiencia."}]}
+
+REGLAS
+- items debe contener exactamente 4 objetos y 4 candidateId diferentes que existan literalmente en CANDIDATAS_JSON.
+- Categorías permitidas: modelos, agentes, herramientas, automatizacion, negocio, investigacion, seguridad, regulacion.
+- Máximo 2 noticias de la misma categoría.
+- supportingCandidateIds sólo puede incluir IDs reales que describan el mismo acontecimiento; si no hay corroboración, usa [].
+- headline: 12-180 caracteres. summary: 40-700 caracteres. whyItMatters: 30-500 caracteres.
+- No inventes hechos, productos, fechas, enlaces, fuentes o identificadores. No copies frases largas de la fuente.
+- El campo content final nunca puede quedar vacío. Comprueba silenciosamente el contrato antes de responder.
+${isRetry ? "- REPARACIÓN: la respuesta anterior fue vacía o inválida. Genera ahora el objeto JSON completo desde cero y verifica que tenga cuatro items." : ""}
+
+CANDIDATAS_JSON:
 ${JSON.stringify(candidates.map(candidate => ({
     id: candidate.id,
     source: candidate.sourceName,
     sourceKind: candidate.sourceKind,
     title: candidate.title,
-    summary: candidate.summary,
+    summary: candidate.summary.slice(0, 360),
     url: candidate.url,
     publishedAt: candidate.publishedAt,
   })))}`
 }
 
+const RETRYABLE_MODEL_ERRORS = new Set([
+  "deepseek_empty_content",
+  "deepseek_invalid_json",
+  "invalid_model_payload",
+  "model_must_select_four",
+  "unknown_or_duplicate_candidate",
+  "invalid_category",
+  "category_limit_exceeded",
+  "invalid_headline",
+  "invalid_summary",
+  "invalid_why_it_matters",
+  "unknown_supporting_candidate",
+])
+
 async function selectWithDeepSeek(candidates: NewsCandidate[], apiKey: string) {
-  const prompt = deepSeekPrompt(candidates)
+  const startedAt = Date.now()
   let lastError: unknown
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const response = await fetch("https://api.deepseek.com/chat/completions", {
-        method: "POST",
-        headers: {
-          "authorization": `Bearer ${apiKey}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          model: DEEPSEEK_MODEL,
-          messages: [
-            { role: "system", content: "Responde en español y produce exclusivamente JSON válido conforme al esquema solicitado." },
-            { role: "user", content: attempt ? `${prompt}\nSegundo intento: revisa cuidadosamente el esquema y entrega contenido no vacío.` : prompt },
-          ],
-          thinking: { type: "enabled" },
-          reasoning_effort: "high",
-          response_format: { type: "json_object" },
-          max_tokens: 2_800,
-        }),
-      })
-      if (!response.ok) throw new Error(`deepseek_http_${response.status}`)
-      const payload = await response.json()
-      const content = payload?.choices?.[0]?.message?.content
-      if (typeof content !== "string" || !content.trim()) throw new Error("deepseek_empty_content")
-      const parsed = JSON.parse(content)
+      const prompt = deepSeekPrompt(candidates, attempt === 1)
+      const remainingMs = DEEPSEEK_TOTAL_TIMEOUT_MS - (Date.now() - startedAt)
+      if (remainingMs <= 0) throw new Error("deepseek_timeout")
+      const payload = await withAbortTimeout(async signal => {
+        const response = await fetch("https://api.deepseek.com/chat/completions", {
+          method: "POST",
+          headers: {
+            "authorization": `Bearer ${apiKey}`,
+            "content-type": "application/json",
+          },
+          signal,
+          body: JSON.stringify({
+            model: DEEPSEEK_MODEL,
+            messages: [
+              { role: "system", content: "Eres un editor de noticias preciso. Responde en español y emite exclusivamente JSON válido en el content final." },
+              { role: "user", content: prompt },
+            ],
+            thinking: { type: "enabled" },
+            reasoning_effort: "high",
+            response_format: { type: "json_object" },
+            max_tokens: 4_096,
+          }),
+        })
+        if (!response.ok) throw new Error(`deepseek_http_${response.status}`)
+        return response.json()
+      }, Math.min(DEEPSEEK_ATTEMPT_TIMEOUT_MS, remainingMs), "deepseek_timeout")
+      const choice = payload?.choices?.[0]
+      const content = choice?.message?.content
+      if (typeof content !== "string" || !content.trim()) {
+        const finishReason = typeof choice?.finish_reason === "string" ? choice.finish_reason : "unknown"
+        const reasoningTokens = Number(payload?.usage?.completion_tokens_details?.reasoning_tokens || 0)
+        throw new Error(`deepseek_empty_content:${finishReason}:${reasoningTokens}`)
+      }
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(content)
+      } catch {
+        throw new Error("deepseek_invalid_json")
+      }
       validateModelSelection(parsed, candidates)
       return parsed
     } catch (error) {
+      const errorCode = error instanceof Error ? error.message.split(":", 1)[0] : "unknown_error"
+      if (!RETRYABLE_MODEL_ERRORS.has(errorCode)) throw error
       lastError = error
     }
   }
@@ -150,7 +199,7 @@ Deno.serve(async request => {
     if (candidates.length < 8) throw new Error(`insufficient_candidates:${candidates.length}`)
 
     const candidateCount = candidates.length
-    const identifiedCandidates = await assignCandidateIds(candidates.slice(0, 30))
+    const identifiedCandidates = await assignCandidateIds(shortlistCandidates(candidates, MODEL_CANDIDATE_LIMIT))
     const selection = await selectWithDeepSeek(identifiedCandidates, deepSeekApiKey)
     const { editionId, itemCount } = await publishValidatedSelection(selection, identifiedCandidates, async selectedItems => {
       const { data, error: publishError } = await supabase.rpc("publish_ai_news_edition", {

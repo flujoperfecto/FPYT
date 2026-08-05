@@ -3,7 +3,9 @@ import {
   fetchFeed,
   parseFeed,
   publishValidatedSelection,
+  shortlistCandidates,
   validateModelSelection,
+  withAbortTimeout,
   type FeedSource,
   type NewsCandidate,
 } from "./news.ts"
@@ -107,4 +109,35 @@ Deno.test("invalid model output never calls the publication callback", async () 
     })
   } catch { rejected = true }
   if (!rejected || publications !== 0) throw new Error("Previous edition would not be preserved")
+})
+
+Deno.test("withAbortTimeout returns a stable error code", async () => {
+  let message = ""
+  try {
+    await withAbortTimeout(signal => new Promise((_resolve, reject) => {
+      signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")))
+    }), 5, "deepseek_timeout")
+  } catch (error) {
+    message = error instanceof Error ? error.message : ""
+  }
+  if (message !== "deepseek_timeout") throw new Error("Timeout was not normalized")
+})
+
+Deno.test("shortlistCandidates represents different sources before filling", () => {
+  const base = {
+    sourceName: "Fuente", sourceKind: "official" as const, summary: "Resumen",
+    publishedAt: "2026-08-05T10:00:00Z",
+  }
+  const candidates = [
+    ...Array.from({ length: 8 }, (_, index) => ({
+      ...base, sourceId: "repeated", title: `Repeated ${index}`, url: `https://example.com/repeated-${index}`,
+    })),
+    { ...base, sourceId: "second", title: "Second source", url: "https://example.com/second" },
+    { ...base, sourceId: "third", title: "Third source", url: "https://example.com/third" },
+  ]
+  const result = shortlistCandidates(candidates, 4)
+  if (result.length !== 4) throw new Error("Shortlist limit failed")
+  if (result.slice(0, 3).map(item => item.sourceId).join(",") !== "repeated,second,third") {
+    throw new Error("Source diversity failed")
+  }
 })
