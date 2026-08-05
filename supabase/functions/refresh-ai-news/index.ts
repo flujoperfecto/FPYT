@@ -14,7 +14,7 @@ import {
   type NewsCandidate,
 } from "./news.ts"
 
-const DEEPSEEK_MODEL = "deepseek-v4-pro"
+const DEEPSEEK_MODEL = "deepseek-v4-flash"
 const MIN_ACTIVE_SOURCES = 8
 const MIN_OFFICIAL_SOURCES = 5
 const MIN_MEDIA_SOURCES = 2
