@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RESOURCE_LABELS, api, formatTime } from './api.js';
 import TurnstileSlot, { useTurnstile } from './Turnstile.jsx';
 import Mark from './BrandMark.jsx';
+import usePageMeta from './usePageMeta.js';
 
 const editableFields = ['title', 'status', 'youtubeUrl', 'accessMode', 'description', 'slug', 'coverUrl'];
 
@@ -107,6 +108,7 @@ function LeadsPanel({ overview, busy, onRemoveLead }) {
 }
 
 export default function AdminPage() {
+  usePageMeta({ title: 'Panel administrativo', path: '/admin', noindex: true });
   const [authenticated, setAuthenticated] = useState(null);
   const [videos, setVideos] = useState([]);
   const [overview, setOverview] = useState(null);

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { RESOURCE_LABELS, api, copyText, downloadResource, formatTime, youtubeId } from './api.js';
 import Mark from './BrandMark.jsx';
+import usePageMeta from './usePageMeta.js';
 
 function HubResource({ item }) {
   const [copied, setCopied] = useState(false);
@@ -30,6 +31,12 @@ export default function HubPage({ slug, preview = false }) {
   const [active, setActive] = useState(0);
   const [completed, setCompleted] = useState([]);
   const [error, setError] = useState('');
+  usePageMeta({
+    title: video?.title,
+    description: video ? `${video.title}: aula interactiva con línea de tiempo, prompts y materiales, capítulo a capítulo.` : undefined,
+    path: `/hub/${slug}`,
+    noindex: preview,
+  });
 
   useEffect(() => {
     api(preview ? `/api/admin/preview/${slug}` : `/api/hub/${slug}`).then(data => {

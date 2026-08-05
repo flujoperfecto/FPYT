@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, getAuthSession } from './api.js';
 import TurnstileSlot, { useTurnstile } from './Turnstile.jsx';
 import Mark from './BrandMark.jsx';
+import usePageMeta from './usePageMeta.js';
 
 export default function AccessPage({ slug }) {
   const [video, setVideo] = useState(null);
@@ -9,6 +10,11 @@ export default function AccessPage({ slug }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const turnstile = useTurnstile();
+  usePageMeta({
+    title: video?.title,
+    description: video ? `${video.title}: accede gratis a la línea de tiempo, prompts y materiales de este tutorial de Flujo Perfecto.` : undefined,
+    path: `/acceso/${slug}`,
+  });
 
   useEffect(() => {
     api(`/api/videos/${slug}`).then(videoData => {

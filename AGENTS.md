@@ -182,6 +182,13 @@ src/
   Turnstile.jsx       Carga y ejecución explícita de Turnstile.
   BrandMark.jsx       Única fuente del logo visible.
   data.js             Contenido local de demostración de la landing.
+  usePageMeta.js      Hook que actualiza título, meta description, canonical,
+                      Open Graph/Twitter y robots por ruta (App.jsx, AccessPage.jsx,
+                      HubPage.jsx, AdminPage.jsx). Mejora la corrección para
+                      navegadores reales y rastreadores que ejecutan JavaScript
+                      (Googlebot); NO resuelve la visibilidad para rastreadores de
+                      IA sin JS (GPTBot, ClaudeBot, PerplexityBot) — eso requiere
+                      prerenderizado/SSR, ver §13.
   styles.css          Landing y sistema visual principal.
   portal.css          Acceso, hub y administración.
 
@@ -192,6 +199,13 @@ public/images/
   flujo-classroom.webp     Arte del aula y portada por defecto.
   flujo-oracle-desktop.webp  Hero Oráculo Vivo 1920×1080.
   flujo-oracle-mobile.webp   Composición móvil Oráculo Vivo 1080×1350.
+
+public/robots.txt, public/sitemap.xml, public/llms.txt
+  Añadidos el 2026-08-05 (auditoría SEO/GEO). sitemap.xml sólo lista rutas
+  estáticas estables — ver nota dentro del archivo sobre por qué no incluye
+  rutas de tutoriales todavía. Los tres necesitan `Content-Type` con charset
+  explícito en `vercel.json` porque contienen texto no-ASCII (o para
+  consistencia); no los sirvas sin esa cabecera.
 
 supabase/
   migrations/         Historial inmutable del esquema.
@@ -324,5 +338,13 @@ Los smoke tests crean fixtures aislados y deben limpiarlos incluso si fallan. Co
 - La Edge Function `grant-tutorial-access` quedó desplegada como versión 6 el 2026-08-04 después de aplicar `20260804200000_atomic_access_attempts.sql`. En cambios futuros recuerda que `db push` sólo sincroniza SQL y que el código TypeScript requiere `npx supabase functions deploy grant-tutorial-access` por separado.
 - El directorio `server/` se eliminó el 2026-08-04: estaba vacío y podía sugerir a un futuro agente que existe un backend Node propio, contradiciendo la arquitectura descrita en §3. Si en algún momento se necesita un proceso Node server-side, créalo de nuevo con contenido real, no como placeholder.
 - Las versiones de `react`, `react-dom`, `vite` y `@vitejs/plugin-react` en `package.json` se fijaron a las versiones instaladas (antes usaban `"latest"`) el 2026-08-04, para que `npm install` sea reproducible entre máquinas y no arrastre un mayor sin aviso. Súbelas deliberadamente cuando quieras actualizar, revisando notas de cambios.
-- Pulso IA conserva la última edición cuando una fuente o DeepSeek falla. `supabase:run-news-now` ya publicó cuatro filas válidas el 2026-08-05 (verificado por SQL directo, equivalente a `supabase:smoke-news`). El Cron sigue desactivado hasta que el usuario autorice explícitamente activarlo con `supabase:activate-news-cron`, porque implica una llamada de pago diaria y recurrente.
+- Pulso IA conserva la última edición cuando una fuente o DeepSeek falla. `supabase:run-news-now` ya publicó cuatro filas válidas el 2026-08-05 (verificado por SQL directo, equivalente a `supabase:smoke-news`). El Cron `refresh-ai-news-daily` está **activo** desde el 2026-08-05.
 - La lista versionada de feeds conserva únicamente endpoints estables verificados. Anthropic y Meta figuran como pendientes en el código porque no publican actualmente un RSS/Atom oficial estable; no los sustituyas por agregadores de terceros sin una decisión editorial explícita.
+- **Auditoría SEO/GEO (2026-08-05).** Hallazgo central: el sitio es una SPA 100% client-side sin prerenderizado — el HTML inicial no contiene texto, sólo `<title>`. Cualquier rastreador que no ejecute JavaScript (GPTBot, ClaudeBot, PerplexityBot, y cualquier indexador de primera pasada) ve una página en blanco. `site:flujoperfecto.com` devolvía 0 resultados en Google el día de la auditoría (el sitio llevaba 1 día desplegado, así que parte de eso es esperable, pero sin sitemap ni robots.txt tampoco había señal de descubrimiento).
+  - Corregido en esta sesión: `public/robots.txt`, `public/sitemap.xml` (sólo `/` por ahora — ver nota en el propio archivo), `public/llms.txt`, JSON-LD Organization+WebSite y Open Graph/Twitter completos en `index.html`, y `src/usePageMeta.js` (título/descripción/canonical/robots por ruta, con `noindex` en `/admin` y en `?preview=1`).
+  - **No corregido — requiere decisión o trabajo mayor:**
+    1. Prerenderizado o SSR real. Es la dependencia de todo lo demás para GEO; `usePageMeta.js` sólo ayuda a navegadores reales y rastreadores que sí ejecutan JS.
+    2. El único tutorial publicado (`idea-a-app-con-ia`) tiene `access_mode = 'email'`, así que ni siquiera con el renderizado resuelto habría contenido de tutorial públicamente indexable — RLS bloquea capítulos/recursos sin sesión con acceso concedido. Decisión de producto pendiente: reservar 1-2 tutoriales ancla como `public` para atraer tráfico orgánico.
+    3. `sitemap.xml` es estático a propósito (ver comentario en el archivo) — no lo llenes a mano con slugs de tutoriales; conviértelo en generación dinámica en build cuando se aborde el prerenderizado.
+    4. No se añadió un `<link rel="canonical">` estático en `index.html` a propósito: como el fallback SPA sirve el mismo HTML para cualquier ruta, un canonical fijo apuntando a `/` declararía incorrectamente que todas las rutas son duplicados de la home. `usePageMeta.js` ya lo corrige dinámicamente por ruta; no reintroduzcas uno estático sin resolver esto primero.
+  - Auditoría completa (keywords, on-page, técnico, competencia, plan priorizado) publicada como artefacto durante la sesión; pide el enlace si se necesita retomarla.
