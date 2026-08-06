@@ -15,9 +15,10 @@ import {
 } from "./news.ts"
 
 const DEEPSEEK_MODEL = "deepseek-v4-pro"
-const MIN_ACTIVE_SOURCES = 8
-const MIN_OFFICIAL_SOURCES = 5
-const MIN_MEDIA_SOURCES = 2
+// ACTIVE_FEEDS ahora sólo contiene fuentes oficiales/primarias (ver news.ts), así que
+// este mínimo es simplemente cuántas de esas fuentes deben responder para garantizar
+// diversidad de candidatos; ya no hay una cuota separada para prensa.
+const MIN_ACTIVE_SOURCES = 5
 const DEEPSEEK_TOTAL_TIMEOUT_MS = 110_000
 const DEEPSEEK_ATTEMPT_TIMEOUT_MS = 105_000
 
@@ -47,8 +48,11 @@ async function equalSecrets(left: string, right: string) {
 function deepSeekPrompt(candidates: NewsCandidate[], isRetry = false) {
   return `Actúa como editor jefe de Pulso IA para creadores, builders y especialistas en automatización.
 
+GARANTÍA EDITORIAL
+Todas las candidatas de CANDIDATAS_JSON provienen ya de comunicados y blogs oficiales de la organización protagonista del hecho (fuente primaria). No hay prensa de terceros en la lista y no debes tratar ninguna candidata como si lo fuera.
+
 TAREA
-Elige exactamente 4 noticias distintas de CANDIDATAS_JSON. Ordénalas por utilidad práctica e impacto. Evalúa internamente actualidad, fiabilidad de la fuente, posibilidad de aplicación, diversidad y corroboración.
+Elige exactamente 4 noticias distintas de CANDIDATAS_JSON. Ordénalas por utilidad práctica e impacto. Evalúa internamente actualidad, posibilidad de aplicación, diversidad temática y corroboración entre candidatas.
 
 CONTRATO JSON OBLIGATORIO
 Devuelve sólo este objeto JSON, sin Markdown, comentarios ni claves adicionales:
@@ -68,7 +72,6 @@ CANDIDATAS_JSON:
 ${JSON.stringify(candidates.map(candidate => ({
     id: candidate.id,
     source: candidate.sourceName,
-    sourceKind: candidate.sourceKind,
     title: candidate.title,
     summary: candidate.summary.slice(0, 360),
     url: candidate.url,
@@ -182,10 +185,8 @@ Deno.serve(async request => {
 
     const results = await Promise.allSettled(ACTIVE_FEEDS.map(async feed => ({ feed, entries: await fetchFeed(feed) })))
     const active = results.flatMap(result => result.status === "fulfilled" ? [result.value] : [])
-    const officialCount = active.filter(result => result.feed.kind === "official").length
-    const mediaCount = active.filter(result => result.feed.kind === "media").length
-    if (active.length < MIN_ACTIVE_SOURCES || officialCount < MIN_OFFICIAL_SOURCES || mediaCount < MIN_MEDIA_SOURCES) {
-      throw new Error(`insufficient_active_sources:${active.length}/${officialCount}/${mediaCount}`)
+    if (active.length < MIN_ACTIVE_SOURCES) {
+      throw new Error(`insufficient_active_sources:${active.length}`)
     }
 
     const priorItems = await recentItems(supabase, today)

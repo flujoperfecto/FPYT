@@ -35,12 +35,12 @@ Deno.test("filterAndDeduplicate removes repeated URLs, titles and prior editions
   if (result.length !== 1 || result[0].url !== "https://example.com/one") throw new Error("Deduplication failed")
 })
 
-function candidate(index: number, sourceName = "Fuente"): NewsCandidate {
+function candidate(index: number, sourceName = "Fuente", sourceKind: "official" | "media" = "official"): NewsCandidate {
   return {
     id: `news_${index}`,
     sourceId: `source_${index}`,
     sourceName,
-    sourceKind: index % 2 ? "official" : "media",
+    sourceKind,
     title: `Candidate title ${index}`,
     summary: "A useful source summary that is not copied in full.",
     url: `https://example.com/${index}`,
@@ -60,6 +60,21 @@ Deno.test("validateModelSelection accepts four real candidates", () => {
   })) }
   const output = validateModelSelection(value, candidates)
   if (output.length !== 4 || output[0].sources.length !== 1) throw new Error("Valid selection failed")
+})
+
+Deno.test("validateModelSelection rejects a non-primary source even if selected by id", () => {
+  const candidates = [candidate(1), candidate(2), candidate(3), candidate(4, "Fuente", "media")]
+  const value = { items: candidates.map((item, index) => ({
+    candidateId: item.id,
+    supportingCandidateIds: [],
+    category: index < 2 ? "herramientas" : "agentes",
+    headline: `Titular práctico número ${index + 1}`,
+    summary: "Este es un resumen en español suficientemente largo para pasar la validación del contrato.",
+    whyItMatters: "Importa porque permite tomar una decisión práctica con mejor contexto.",
+  })) }
+  let rejected = false
+  try { validateModelSelection(value, candidates) } catch { rejected = true }
+  if (!rejected) throw new Error("Non-primary candidate must be rejected even as a direct pick")
 })
 
 Deno.test("validateModelSelection rejects invented candidate identifiers", () => {

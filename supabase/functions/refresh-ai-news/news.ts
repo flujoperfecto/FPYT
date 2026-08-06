@@ -47,15 +47,19 @@ export const ACTIVE_FEEDS: FeedSource[] = [
   { id: "github-changelog", name: "GitHub", url: "https://github.blog/changelog/feed/", kind: "official" },
   { id: "hugging-face", name: "Hugging Face", url: "https://huggingface.co/blog/feed.xml", kind: "official" },
   { id: "cloudflare", name: "Cloudflare", url: "https://blog.cloudflare.com/rss/", kind: "official" },
-  { id: "techcrunch-ai", name: "TechCrunch AI", url: "https://techcrunch.com/category/artificial-intelligence/feed/", kind: "media" },
-  { id: "mit-technology-review", name: "MIT Technology Review", url: "https://www.technologyreview.com/topic/artificial-intelligence/feed", kind: "media" },
-  { id: "ars-technica", name: "Ars Technica", url: "https://feeds.arstechnica.com/arstechnica/technology-lab", kind: "media" },
-  { id: "the-verge-ai", name: "The Verge", url: "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml", kind: "media" },
 ]
 
 // Estas publicaciones siguen en el registro editorial, pero no exponen un RSS/Atom
 // oficial estable a la fecha de esta versión. No se sustituyen por feeds de terceros.
 export const PENDING_OFFICIAL_FEEDS = ["Anthropic", "Meta AI"] as const
+
+// Prensa que cubre IA pero no es la fuente primaria del hecho (no es el organismo o
+// empresa protagonista del anuncio). Pulso IA cita exclusivamente fuentes primarias,
+// así que estos medios se excluyen a propósito de ACTIVE_FEEDS: se documentan aquí
+// para que ningún agente futuro los reintroduzca creyendo que fue un olvido.
+export const EXCLUDED_SECONDARY_MEDIA = [
+  "TechCrunch AI", "MIT Technology Review", "Ars Technica", "The Verge",
+] as const
 
 const TRACKING_PARAMETERS = ["gclid", "fbclid", "mc_cid", "mc_eid", "ref", "source"]
 const ALLOWED_CATEGORIES = new Set([
@@ -285,6 +289,13 @@ export function validateModelSelection(value: unknown, candidates: NewsCandidate
     const supportingIds = [...new Set(item.supportingCandidateIds || [])]
     if (supportingIds.some(id => !byId.has(id))) throw new Error("unknown_supporting_candidate")
     const sourceCandidates = [candidate, ...supportingIds.filter(id => id !== candidate.id).map(id => byId.get(id)!)]
+    // Barrera de defensa en profundidad: Pulso IA sólo debe citar fuentes primarias.
+    // ACTIVE_FEEDS ya excluye prensa secundaria, así que esto nunca debería dispararse;
+    // si lo hace, es un error de construcción del pool de candidatos, no del modelo,
+    // así que no se agrega a RETRYABLE_MODEL_ERRORS.
+    if (sourceCandidates.some(source => source.sourceKind !== "official")) {
+      throw new Error("non_primary_source_in_pool")
+    }
     const uniqueSources = [...new Map(sourceCandidates.map(source => [source.url, source])).values()]
     return {
       position: index + 1,

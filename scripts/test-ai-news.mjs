@@ -26,12 +26,12 @@ const unique = filterAndDeduplicate([
 ], new Date('2026-08-04T00:00:00Z'), now, [{ headline: 'Anterior', primary_source_url: 'https://example.com/two' }]);
 assert.equal(unique.length, 1);
 
-function candidate(index) {
+function candidate(index, sourceKind = 'official') {
   return {
     id: `news_${index}`,
     sourceId: `source_${index}`,
     sourceName: `Fuente ${index}`,
-    sourceKind: index % 2 ? 'official' : 'media',
+    sourceKind,
     title: `Candidate title ${index}`,
     summary: 'A useful source summary that is not copied in full.',
     url: `https://example.com/${index}`,
@@ -50,6 +50,17 @@ const selection = { items: candidates.map((item, index) => ({
 })) };
 assert.equal(validateModelSelection(selection, candidates).length, 4);
 assert.throws(() => validateModelSelection({ items: [] }, candidates), /model_must_select_four/);
+
+const mediaCandidates = [candidate(1), candidate(2), candidate(3), candidate(4, 'media')];
+const mediaSelection = { items: mediaCandidates.map((item, index) => ({
+  candidateId: item.id,
+  supportingCandidateIds: [],
+  category: index < 2 ? 'herramientas' : 'agentes',
+  headline: `Titular práctico número ${index + 1}`,
+  summary: 'Este es un resumen en español suficientemente largo para pasar la validación del contrato.',
+  whyItMatters: 'Importa porque permite tomar una decisión práctica con mejor contexto.',
+})) };
+assert.throws(() => validateModelSelection(mediaSelection, mediaCandidates), /non_primary_source_in_pool/);
 
 await assert.rejects(
   fetchFeed(source, async () => new Response('oversized', { status: 200, headers: { 'content-length': '1001' } }), 100, 1_000),
@@ -77,4 +88,4 @@ const diverseShortlist = shortlistCandidates([
 assert.equal(diverseShortlist.length, 4);
 assert.deepEqual(diverseShortlist.slice(0, 3).map(item => item.sourceId), ['repeated', 'second', 'third']);
 
-console.log('Pulso IA function tests: 9/9 OK');
+console.log('Pulso IA function tests: 10/10 OK');
