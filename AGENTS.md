@@ -27,6 +27,7 @@ El progreso se marca manualmente por momento y se guarda sólo en el navegador d
 - Pruebas unitarias de Pulso IA: 9/9 aprobadas (RSS, Atom, límites, timeout, deduplicación, shortlist diverso y validación de DeepSeek).
 - Build Vite aprobado y `npm audit --omit=dev` sin vulnerabilidades.
 - Lighthouse móvil sobre el build de producción: rendimiento 91, accesibilidad 96 y CLS 0 (2026-08-04).
+- Mejora UX local verificada el 2026-08-06: la portada prioriza la ruta disponible antes de Pulso IA; el acceso explica requisitos y ofrece un salto directo al formulario; el aula reanuda el primer momento incompleto, sincroniza la línea de tiempo mediante YouTube IFrame API, conserva un fallback `youtube-nocookie`, muestra señales contextuales de recursos y celebra el 100%; el panel incorpora verificación visual de la URL de YouTube y una barra persistente para cambios sin guardar. Esta mejora todavía debe desplegarse antes de considerarla parte del estado remoto.
 - Repositorio desplegado en Vercel desde `main` con dominio canónico `https://www.flujoperfecto.com`, Node.js 22, `vercel.json`, fallback SPA, cabeceras seguras y `.vercelignore`.
 - `APP_ORIGIN` de la Edge Function está configurado en Supabase como `https://www.flujoperfecto.com`; el preflight remoto se verificó con respuesta 204 y el origen correcto el 2026-08-04.
 - Cloudflare Turnstile tiene un widget de producción llamado `Flujo Perfecto Producción`, restringido a `www.flujoperfecto.com` y en modo Managed. La Site Key real está en Vercel y la Secret Key real sólo en Supabase Auth; ambas se configuraron el 2026-08-04 y nunca deben copiarse al repositorio.
@@ -158,14 +159,17 @@ Toda modificación de esquema debe hacerse con una migración nueva generada por
 src/
   App.jsx             Landing, biblioteca, aula demostrativa y método.
   AccessPage.jsx      Captura de email y concesión de acceso.
-  HubPage.jsx         Aula real, materiales y progreso local.
+  HubPage.jsx         Aula real, materiales y progreso local. Reanuda el primer
+                      momento incompleto y sincroniza el momento activo con
+                      YouTube IFrame API sin recrear el reproductor al avanzar.
   AdminPage.jsx       Login y panel editorial. Dividido en subcomponentes internos
                       (AdminSidebar, AdminStats, VideoListPanel, VideoEditorHeader,
                       VideoForm, ChapterTimeline, ChapterEditorPanel, LeadsPanel)
                       desde 2026-08-04 para que el archivo siga siendo legible a
                       medida que crezca el panel; el estado y los handlers siguen
                       centralizados en AdminPage, los subcomponentes son de presentación.
-  Router.jsx          Enrutamiento por pathname.
+  Router.jsx          Enrutamiento por pathname, carga diferida de rutas privadas
+                      y experiencia 404 con identidad propia.
   api.js              Capa de acceso a Supabase y operaciones de dominio.
                       Implementa también GET /api/news para la última edición pública.
                       También exporta RESOURCE_LABELS (mapa de tipo de recurso a
@@ -222,6 +226,8 @@ La marca combina Grecia clásica con tecnología/IA:
 - El hero `Oráculo Vivo` usa composiciones separadas de escritorio y móvil, tres planos CSS/SVG y desplazamientos máximos de 6/12/18 px mediante `requestAnimationFrame`; deja de actualizarse cuando sale del viewport.
 - `AiNewsTicker` reserva su altura, puede pausarse y abre `NewsDrawer` con trampa de foco, cierre por Escape y devolución del foco. En móvil no se anima automáticamente.
 - La cuadrícula de Biblioteca es fluida y permite que un único tutorial utilice todo el ancho disponible. El panel lateral de recursos atrapa el foco, responde a Escape y devuelve el foco al control que lo abrió.
+- La experiencia `Ruta Viva` usa violeta para el momento activo, verde ácido para progreso/siguiente acción y tonos neutros para lo pendiente. En móvil el progreso del aula permanece visible y los controles operativos mantienen objetivos táctiles de al menos 44 px.
+- La línea de tiempo del aula sigue la reproducción mediante YouTube IFrame API; los cambios manuales usan `seekTo` para no recrear el iframe. Si la API tarda o falla, se conserva un iframe directo de `youtube-nocookie.com`.
 
 No reemplaces esta identidad por tarjetas genéricas, degradados arbitrarios o iconos de librería sin adaptación. Reutiliza `BrandMark.jsx` para el logo; no dupliques su marcado.
 
@@ -320,3 +326,4 @@ Los smoke tests crean fixtures aislados y deben limpiarlos incluso si fallan. Co
 - Las versiones de `react`, `react-dom`, `vite` y `@vitejs/plugin-react` en `package.json` se fijaron a las versiones instaladas (antes usaban `"latest"`) el 2026-08-04, para que `npm install` sea reproducible entre máquinas y no arrastre un mayor sin aviso. Súbelas deliberadamente cuando quieras actualizar, revisando notas de cambios.
 - Pulso IA conserva la última edición cuando una fuente o DeepSeek falla. El secreto ya está configurado, pero el Cron debe permanecer desactivado hasta que el usuario autorice otra ejecución de pago, `supabase:run-news-now` publique cuatro filas y `supabase:smoke-news` las confirme. Sólo entonces activa `supabase:activate-news-cron`.
 - La lista versionada de feeds conserva únicamente endpoints estables verificados. Anthropic y Meta figuran como pendientes en el código porque no publican actualmente un RSS/Atom oficial estable; no los sustituyas por agregadores de terceros sin una decisión editorial explícita.
+- El panel muestra la miniatura real de YouTube junto a cada URL para detectar desalineaciones editoriales antes de publicar. La verificación es deliberadamente visual: no cambies automáticamente títulos, capítulos ni URLs remotas basándote sólo en metadatos de YouTube.

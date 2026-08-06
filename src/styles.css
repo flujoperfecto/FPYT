@@ -255,3 +255,41 @@ span.news-ticker-item { cursor: default; }
   .news-ticker-track,.hero-geometry svg,.hero-veil:before,.hero-veil i,.cta-portal>i { animation: none !important; }
   .news-ticker-lane { overflow-x: auto; }
 }
+
+/* Ruta Viva — accesibilidad, orientación y catálogo con intención. */
+.skip-link { min-height: 44px; position: fixed; z-index: 100; top: 10px; left: 10px; padding: 0 15px; translate: 0 -160%; display: inline-flex; align-items: center; background: var(--acid); color: #0a080e; font-weight: 850; border-radius: 2px; transition: translate .2s; }
+.skip-link:focus { translate: 0; }
+.brand { min-height: 44px; }
+.nav-scrim { display: none; }
+.featured-route-label { margin: -24px 0 15px; color: #8f8597; font: 800 9px/1.2 ui-monospace,monospace; letter-spacing: .16em; }
+.featured-route-label span { color: var(--acid); }
+.tutorial-skeleton { min-height: 380px; display: grid; grid-template-columns: .93fr 1.07fr; overflow: hidden; }
+.tutorial-skeleton>div:first-child { min-height: 380px; background: linear-gradient(110deg,#15101d 8%,#21172e 18%,#15101d 33%); background-size: 220% 100%; animation: skeleton-flow 1.4s linear infinite; }
+.tutorial-skeleton>div:last-child { padding: 50px 28px; display: grid; align-content: center; gap: 18px; }
+.tutorial-skeleton i { display: block; height: 12px; border-radius: 2px; background: #251b2f; }
+.tutorial-skeleton i:first-child { width: 36%; }.tutorial-skeleton i:nth-child(2) { width: 88%; height: 48px; }.tutorial-skeleton i:last-child { width: 68%; }
+@keyframes skeleton-flow { to { background-position: -220% 0; } }
+
+@media (max-width: 680px) {
+  body.nav-open { overflow: hidden; }
+  .site-header .nav { z-index: 3; }
+  .nav-scrim { display: block; position: fixed; z-index: 2; inset: 68px 0 0; width: 100%; height: calc(100vh - 68px); border: 0; background: rgba(3,2,5,.7); backdrop-filter: blur(5px); }
+  .menu-button[aria-expanded="true"] span:first-child { transform: translateY(4px) rotate(45deg); }
+  .menu-button[aria-expanded="true"] span:last-child { transform: translateY(-4px) rotate(-45deg); }
+  .menu-button span { transition: transform .2s; }
+  .featured-route-label { margin-top: -20px; }
+  .tutorial-skeleton { min-height: 600px; grid-template-columns: 1fr; grid-template-rows: 300px 1fr; }
+  .tutorial-skeleton>div:first-child { min-height: 300px; }
+  .news-ticker-lane,.library-promise,.filters { scrollbar-width: none; }
+  .news-ticker-lane::-webkit-scrollbar,.library-promise::-webkit-scrollbar,.filters::-webkit-scrollbar { display: none; }
+  .news-ticker-head { min-height: 72px; }
+  .news-ticker-head button { min-width: 74px; min-height: 44px; display: inline-flex; justify-content: flex-end; align-items: center; }
+  .news-ticker-item { min-height: 118px; }
+  .ai-news-ticker { min-height: 190px; }
+  .search input { min-height: 44px; }
+  .footer-grid>div a { min-height: 44px; display: flex; align-items: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tutorial-skeleton>div:first-child { animation: none; }
+}

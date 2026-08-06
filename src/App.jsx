@@ -84,19 +84,30 @@ function Header() {
   const [open, setOpen] = useState(false);
   useEffect(() => {
     const close = () => setOpen(false);
+    const onKey = event => { if (event.key === 'Escape') close(); };
+    const onResize = () => { if (window.innerWidth > 680) close(); };
     window.addEventListener('hashchange', close);
-    return () => window.removeEventListener('hashchange', close);
-  }, []);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('resize', onResize);
+    document.body.classList.toggle('nav-open', open);
+    return () => {
+      window.removeEventListener('hashchange', close);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', onResize);
+      document.body.classList.remove('nav-open');
+    };
+  }, [open]);
   return (
     <header className="site-header">
       <a className="brand" href="#inicio" aria-label="Flujo Perfecto, inicio"><Mark /><strong>FLUJO PERFECTO</strong></a>
-      <button className="menu-button" aria-expanded={open} aria-label="Abrir menú" onClick={() => setOpen(!open)}><span /><span /></button>
-      <nav className={open ? 'nav open' : 'nav'} aria-label="Navegación principal">
+      <button className="menu-button" aria-controls="main-navigation" aria-expanded={open} aria-label={open ? 'Cerrar menú' : 'Abrir menú'} onClick={() => setOpen(!open)}><span /><span /></button>
+      <nav id="main-navigation" className={open ? 'nav open' : 'nav'} aria-label="Navegación principal">
         <a href="#biblioteca">Biblioteca</a>
         <a href="#aula">Aula</a>
         <a href="#metodo">Método</a>
         <a className="nav-cta" href={channelUrl} target="_blank" rel="noreferrer">YouTube <Arrow diagonal /></a>
       </nav>
+      {open && <button className="nav-scrim" onClick={() => setOpen(false)} aria-hidden="true" tabIndex={-1} />}
     </header>
   );
 }
@@ -184,6 +195,16 @@ function Library() {
   }, []);
   useEffect(() => { load(); }, [load]);
   const visible = useMemo(() => videos.filter(video => `${video.title} ${video.description}`.toLowerCase().includes(query.toLowerCase())), [videos, query]);
+  const showCatalogTools = videos.length > 1;
+
+  const cards = !error && visible.map((video, index) => (
+    <article className="tutorial-card" key={video.id} data-reveal>
+      <a href={video.accessMode === 'public' ? `/hub/${video.slug}` : `/acceso/${video.slug}`} aria-label={`Abrir ${video.title}`}>
+        <div className="tutorial-cover" style={{ backgroundImage: `linear-gradient(0deg, rgba(7,5,11,.9), transparent 62%), url('${video.coverUrl}')` }}><span>{String(index + 1).padStart(2, '0')}</span><b>VER RUTA DE CONSTRUCCIÓN</b></div>
+        <div className="tutorial-body"><small>TUTORIAL · {video.accessMode === 'public' ? 'ACCESO DIRECTO' : 'MATERIAL GRATUITO'}</small><h3>{video.title}</h3><p>{video.description}</p><div><span>{video.chapters} momentos</span><span>{video.resources} materiales</span><b><Arrow /></b></div></div>
+      </a>
+    </article>
+  ));
 
   return (
     <section className="library section" id="biblioteca">
@@ -193,22 +214,13 @@ function Library() {
           <h2>Encuentra. Adapta.<br /><em>Construye.</em></h2>
           <p>Cada video se convierte en una ruta de construcción con capítulos y materiales entregados en el momento preciso.</p>
         </div>
-        <div className="library-tools" data-reveal>
-          <label className="search"><span aria-hidden="true">⌕</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar un tutorial..." aria-label="Buscar tutoriales" /></label>
-          <div className="library-promise"><span>VIDEO</span><span>CAPÍTULOS</span><span>MATERIALES</span><span>PROGRESO</span></div>
-        </div>
+        {showCatalogTools && <div className="library-tools" data-reveal>
+          <label className="search"><span aria-hidden="true">⌕</span><input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar un tutorial..." aria-label="Buscar tutoriales" /></label>
+          <div className="library-promise" aria-label="Todos los tutoriales incluyen video, capítulos, materiales y progreso"><span>VIDEO</span><span>CAPÍTULOS</span><span>MATERIALES</span><span>PROGRESO</span></div>
+        </div>}
         {error && <div className="empty-state" role="alert">No se pudieron cargar los tutoriales. <button className="text-button" onClick={load}>Reintentar</button></div>}
-        {!error && <div className="result-count"><span>{String(visible.length).padStart(2, '0')}</span> TUTORIALES DISPONIBLES</div>}
-        <div className="tutorial-grid">
-          {!error && visible.map((video, index) => (
-            <article className="tutorial-card" key={video.id} data-reveal>
-              <a href={video.accessMode === 'public' ? `/hub/${video.slug}` : `/acceso/${video.slug}`} aria-label={`Abrir ${video.title}`}>
-                <div className="tutorial-cover" style={{ backgroundImage: `linear-gradient(0deg, rgba(7,5,11,.9), transparent 62%), url('${video.coverUrl}')` }}><span>{String(index + 1).padStart(2, '0')}</span><b>VER RUTA DE CONSTRUCCIÓN</b></div>
-                <div className="tutorial-body"><small>TUTORIAL · {video.accessMode === 'public' ? 'ACCESO DIRECTO' : 'MATERIAL GRATUITO'}</small><h3>{video.title}</h3><p>{video.description}</p><div><span>{video.chapters} momentos</span><span>{video.resources} materiales</span><b><Arrow /></b></div></div>
-              </a>
-            </article>
-          ))}
-        </div>
+        {!error && !loading && <div className={showCatalogTools ? 'result-count' : 'featured-route-label'} aria-live="polite"><span>{showCatalogTools ? String(visible.length).padStart(2, '0') : 'RUTA 01'}</span> {showCatalogTools ? 'TUTORIALES DISPONIBLES' : 'EMPIEZA POR AQUÍ'}</div>}
+        {!error && (loading ? <div className="tutorial-grid" aria-label="Cargando tutoriales" aria-busy="true"><article className="tutorial-card tutorial-skeleton"><div /><div><i /><i /><i /></div></article></div> : <div className="tutorial-grid">{cards}</div>)}
         {!error && !loading && !visible.length && <div className="empty-state">No hay tutoriales publicados con esa búsqueda.</div>}
       </div>
     </section>
@@ -381,5 +393,6 @@ function NewsDrawer({ item, onClose }) {
 export default function App() {
   const [selected, setSelected] = useState(null);
   const [selectedNews, setSelectedNews] = useState(null);
-  return <><PageEffects /><Header /><main><Hero /><AiNewsTicker onOpen={setSelectedNews} /><Library /><Classroom onOpen={setSelected} /><Method /><FinalCta /></main><Footer /><ResourceDrawer item={selected} onClose={() => setSelected(null)} /><NewsDrawer item={selectedNews} onClose={() => setSelectedNews(null)} /></>;
+  useEffect(() => { document.title = 'Flujo Perfecto — Construye con IA'; }, []);
+  return <><a className="skip-link" href="#contenido">Saltar al contenido</a><PageEffects /><Header /><main id="contenido"><Hero /><Library /><AiNewsTicker onOpen={setSelectedNews} /><Classroom onOpen={setSelected} /><Method /><FinalCta /></main><Footer /><ResourceDrawer item={selected} onClose={() => setSelected(null)} /><NewsDrawer item={selectedNews} onClose={() => setSelectedNews(null)} /></>;
 }

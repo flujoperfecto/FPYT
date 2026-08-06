@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RESOURCE_LABELS, api, formatTime } from './api.js';
+import { RESOURCE_LABELS, api, formatTime, youtubeId } from './api.js';
 import TurnstileSlot, { useTurnstile } from './Turnstile.jsx';
 import Mark from './BrandMark.jsx';
 
@@ -75,14 +75,16 @@ function VideoEditorHeader({ selected, dirty, busy, onDuplicate, onDelete }) {
 }
 
 function VideoForm({ selected, draft, dirty, busy, setField, onSubmit, onDiscard, onUploadCover, onRemoveCover }) {
+  const videoId = youtubeId(draft.youtubeUrl);
   return <form className="video-form" onSubmit={onSubmit}>
     <div className="field-row"><label>Título<input required value={draft.title} onChange={event => setField('title', event.target.value)} /></label><label>Estado<select value={draft.status} onChange={event => setField('status', event.target.value)}><option value="draft">Borrador</option><option value="published">Publicado</option></select></label></div>
     <label>URL de YouTube<input type="url" value={draft.youtubeUrl} onChange={event => setField('youtubeUrl', event.target.value)} placeholder="https://youtube.com/watch?v=…" /></label>
+    {videoId && <aside className="youtube-verification"><img src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`} alt="Miniatura obtenida de YouTube" /><div><span>VERIFICACIÓN DE CONTENIDO</span><strong>¿La miniatura coincide con este tutorial?</strong><p>Comprueba título, portada y capítulos antes de publicar. Una URL incorrecta rompe la continuidad de la experiencia.</p><a href={draft.youtubeUrl} target="_blank" rel="noreferrer">Abrir video en YouTube ↗</a></div></aside>}
     <div className={`access-setting ${draft.accessMode === 'public' ? 'is-public' : ''}`}><label>Acceso al material<select value={draft.accessMode || 'email'} onChange={event => setField('accessMode', event.target.value)}><option value="email">Solicita email</option><option value="public">Público, sin email</option></select></label><div><strong>{draft.accessMode === 'public' ? 'Acceso directo activado' : 'Captura de email activada'}</strong><span>{draft.accessMode === 'public' ? 'El enlace llevará directamente al hub y sus materiales.' : 'El suscriptor deberá ingresar su correo antes de abrir el hub.'}</span></div></div>
     <label>Descripción<textarea rows="3" value={draft.description} onChange={event => setField('description', event.target.value)} /></label>
     <div className="field-row"><label>URL pública<input required value={draft.slug} onChange={event => setField('slug', event.target.value)} /></label><label>URL externa de portada<input value={draft.coverUrl} onChange={event => setField('coverUrl', event.target.value)} /></label></div>
     <div className="cover-manager"><img src={draft.coverUrl || '/images/flujo-classroom.webp'} alt="Vista previa de la portada" /><div><strong>Portada del tutorial</strong><span>WebP, JPG, PNG o AVIF · máximo 8 MB</span><label className="cover-upload">{busy === 'cover' ? 'Procesando…' : 'Subir imagen'}<input type="file" accept="image/jpeg,image/png,image/webp,image/avif" onChange={onUploadCover} disabled={Boolean(busy)} /></label>{selected.coverStoragePath && <button type="button" onClick={onRemoveCover} disabled={Boolean(busy)}>Restablecer</button>}</div></div>
-    <div className="form-actions"><button className="small-primary" disabled={!dirty || Boolean(busy)}>{busy === 'save-video' ? 'Guardando…' : dirty ? 'Guardar tutorial' : 'Todo guardado ✓'}</button>{dirty && <button type="button" className="text-button" onClick={onDiscard}>Descartar cambios</button>}</div>
+    <div className={dirty ? 'form-actions is-dirty' : 'form-actions'}><button className="small-primary" disabled={!dirty || Boolean(busy)}>{busy === 'save-video' ? 'Guardando…' : dirty ? 'Guardar tutorial' : 'Todo guardado ✓'}</button>{dirty && <button type="button" className="text-button" onClick={onDiscard}>Descartar cambios</button>}</div>
   </form>;
 }
 
@@ -118,6 +120,8 @@ export default function AdminPage() {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [accessFilter, setAccessFilter] = useState('all');
+
+  useEffect(() => { document.title = 'Panel editorial — Flujo Perfecto'; }, []);
 
   const selected = useMemo(() => videos.find(video => video.id === selectedId), [videos, selectedId]);
   const chapter = selected?.chapters.find(item => item.id === chapterId);
@@ -224,7 +228,7 @@ export default function AdminPage() {
   return <main className="admin-page">
     <AdminSidebar />
     <div className="admin-content">
-      <header className="admin-top"><div><p>PANEL DE CONTENIDOS</p><h1>Tutoriales</h1></div><button onClick={logout}>Cerrar sesión</button></header>
+      <header className="admin-top"><div><p>PANEL DE CONTENIDOS</p><h1>Tutoriales</h1></div><div className="admin-top-actions"><a href="/" target="_blank" rel="noreferrer">Ver sitio ↗</a><button onClick={logout}>Cerrar sesión</button></div></header>
       <AdminStats overview={overview} busy={busy} onCreateVideo={createVideo} />
       <section className="admin-workspace">
         <VideoListPanel
