@@ -221,7 +221,7 @@ La marca combina Grecia clásica con tecnología/IA:
 - Estatuas, templos, geometría, redes, circuitos y energía violeta.
 - Tipografía sans de gran escala combinada con cursiva serif editorial.
 - Bordes finos, retículas, numeración monoespaciada y brillo controlado.
-- La sección Método usa iconos SVG propios, inscripciones griegas, columnas, sello Φ y animaciones compatibles con `prefers-reduced-motion`.
+- La sección Método usa tres ilustraciones WebP escultóricas propias (`method-understand`, `method-build` y `method-launch`), inscripciones griegas, columnas, sello Φ y animaciones CSS de deriva, respiración y barrido compatibles con `prefers-reduced-motion`.
 - La landing incorpora una capa de interacción en `PageEffects`: progreso de lectura, halo de puntero, parallax moderado del hero y revelado progresivo mediante `IntersectionObserver`. Sólo se activa visualmente; no condiciona el acceso al contenido y respeta `prefers-reduced-motion`.
 - El hero `Oráculo Vivo` usa composiciones separadas de escritorio y móvil, tres planos CSS/SVG y desplazamientos máximos de 6/12/18 px mediante `requestAnimationFrame`; deja de actualizarse cuando sale del viewport.
 - `AiNewsTicker` reserva su altura, puede pausarse y abre `NewsDrawer` con trampa de foco, cierre por Escape y devolución del foco. En móvil no se anima automáticamente.

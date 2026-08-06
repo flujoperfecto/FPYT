@@ -264,10 +264,21 @@ function Classroom({ onOpen }) {
   );
 }
 
-function MethodIcon({ step }) {
-  if (step === '01') return <div className="method-icon knowledge" aria-hidden="true"><svg viewBox="0 0 180 180"><circle className="icon-orbit" cx="90" cy="90" r="68" /><circle className="icon-dots" cx="90" cy="90" r="53" /><path className="icon-main" d="M39 90c14-22 31-33 51-33s37 11 51 33c-14 22-31 33-51 33S53 112 39 90Z" /><circle className="icon-core" cx="90" cy="90" r="17" /><path className="icon-detail" d="M90 73v34M73 90h34M59 47l8 10M121 47l-8 10M59 133l8-10M121 133l-8-10" /></svg><i /></div>;
-  if (step === '02') return <div className="method-icon build" aria-hidden="true"><svg viewBox="0 0 180 180"><circle className="icon-orbit" cx="90" cy="90" r="68" /><path className="icon-main" d="M37 66 90 35l53 31H37Zm10 12h86M50 78v54M70 78v54M90 78v54M110 78v54M130 78v54M39 133h102M32 145h116" /><path className="icon-detail" d="M90 35v-16M90 19h24M42 106H27M138 106h15M27 106l-8 8M153 106l8 8" /><circle className="icon-core" cx="19" cy="114" r="4" /><circle className="icon-core" cx="161" cy="114" r="4" /></svg><i /></div>;
-  return <div className="method-icon launch" aria-hidden="true"><svg viewBox="0 0 180 180"><circle className="icon-orbit" cx="90" cy="90" r="68" /><path className="icon-main" d="M49 137V88c0-30 17-51 41-51s41 21 41 51v49M65 137V91c0-20 10-34 25-34s25 14 25 34v46M39 137h102" /><path className="icon-detail" d="m73 111 40-40M86 71h27v27" /><path className="icon-flare" d="M90 154v-18M72 151l8-16M108 151l-8-16" /><circle className="icon-core" cx="90" cy="37" r="5" /></svg><i /></div>;
+const methodVisuals = {
+  '01': { name: 'understand', src: '/images/method-understand.webp' },
+  '02': { name: 'build', src: '/images/method-build.webp' },
+  '03': { name: 'launch', src: '/images/method-launch.webp' }
+};
+
+function MethodVisual({ step }) {
+  const visual = methodVisuals[step];
+  return (
+    <div className={`method-visual method-visual-${visual.name}`} aria-hidden="true">
+      <img src={visual.src} alt="" loading="lazy" decoding="async" />
+      <i className="method-visual-glow" />
+      <i className="method-visual-sweep" />
+    </div>
+  );
 }
 
 function Method() {
@@ -281,7 +292,7 @@ function Method() {
       <div className="method-atmosphere" aria-hidden="true"><i /><i /><i /><span /></div>
       <div className="shell">
         <div className="method-head" data-reveal><p className="method-code">ΜΕΘΟΔΟΣ / SYSTEM 03</p><p className="eyebrow"><span /> EL MÉTODO FLUJO PERFECTO <span /></p><h2>Aprender es bueno.<br /><em>Publicar es mejor.</em></h2><div className="method-seal" aria-hidden="true">Φ</div></div>
-        <div className="method-grid" data-reveal>{steps.map(([n, inscription, title, text]) => <article key={n}><header><span>{n}</span><small>{inscription}</small></header><MethodIcon step={n} /><div className="method-copy"><h3>{title}</h3><p>{text}</p></div><b aria-hidden="true">✦</b></article>)}</div>
+        <div className="method-grid" data-reveal>{steps.map(([n, inscription, title, text]) => <article key={n}><header><span>{n}</span><small>{inscription}</small></header><MethodVisual step={n} /><div className="method-copy"><h3>{title}</h3><p>{text}</p></div><b aria-hidden="true">✦</b></article>)}</div>
       </div>
     </section>
   );
