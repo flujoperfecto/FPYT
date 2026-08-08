@@ -398,7 +398,7 @@ function AiNewsTicker({ onOpen }) {
   };
 
   return <section className={`ai-news-ticker${paused ? ' is-paused' : ''}`} aria-label="Pulso IA, noticias destacadas del día">
-    <div className="news-ticker-head"><span><i /> PULSO IA</span><time dateTime={isFresh ? edition.editionDate : undefined}>{date}</time><button type="button" aria-pressed={paused} onClick={() => setPaused(value => !value)}>{paused ? 'Reanudar' : 'Pausar'} <b aria-hidden="true">{paused ? '▶' : 'Ⅱ'}</b></button></div>
+    <div className="news-ticker-head"><span><i className={isFresh ? 'is-live' : ''} /> PULSO IA</span><time dateTime={isFresh ? edition.editionDate : undefined}>{date}</time><button type="button" aria-pressed={paused} onClick={() => setPaused(value => !value)}>{paused ? 'Reanudar' : 'Pausar'} <b aria-hidden="true">{paused ? '▶' : 'Ⅱ'}</b></button></div>
     <div className="news-ticker-lane">
       <div className="news-ticker-track">
         <div className="news-ticker-group" role="list">{items.map(item => <div role="listitem" key={item.id}>{renderItem(item)}</div>)}</div>
