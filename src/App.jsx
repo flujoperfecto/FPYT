@@ -152,7 +152,9 @@ const taughtTechnologies = [
 function TechnologyStrip() {
   return <section className="technologies" aria-labelledby="technologies-title"><div className="shell technologies-inner" data-reveal>
     <div className="technologies-heading"><p className="eyebrow"><span /> TECNOLOGÍAS QUE ENSEÑAMOS</p><p id="technologies-title">Aprende a construir con las herramientas que están moviendo la IA.</p></div>
-    <ul className="technology-grid" role="list">{taughtTechnologies.map(([name, src], index) => <li className="technology-item" key={name}><span className="technology-index">{String(index + 1).padStart(2, '0')}</span><img className="technology-logo" src={src} alt={name} width="64" height="64" decoding="async" /><span className="technology-name">{name}</span></li>)}</ul>
+    <div className="technology-stage">
+      <ul className="technology-ring" role="list">{taughtTechnologies.map(([name, src], index) => <li className="technology-slot" key={name} style={{ '--i': index }}><div className="technology-billboard"><div className="technology-card"><span className="technology-index">{String(index + 1).padStart(2, '0')}</span><img className="technology-logo" src={src} alt={name} width="76" height="76" decoding="async" /><span className="technology-name">{name}</span></div></div></li>)}</ul>
+    </div>
   </div></section>;
 }
 
