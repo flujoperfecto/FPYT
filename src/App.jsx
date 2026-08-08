@@ -149,12 +149,220 @@ const taughtTechnologies = [
   ['DeepSeek', '/images/technologies/deepseek.png'], ['Moonshot AI', '/images/technologies/moonshot-ai.png']
 ];
 
+// A bolt is a straight segment broken by recursive midpoint displacement: each
+// pass pushes every midpoint sideways, halving the offset, which is what gives
+// lightning its self-similar jaggedness.
+function forkedPath(x0, y0, x1, y1, amplitude) {
+  let points = [[x0, y0], [x1, y1]];
+  let amp = amplitude;
+  for (let pass = 0; pass < 4; pass++) {
+    const next = [points[0]];
+    for (let i = 0; i < points.length - 1; i++) {
+      const [ax, ay] = points[i];
+      const [bx, by] = points[i + 1];
+      const dx = bx - ax, dy = by - ay;
+      const len = Math.hypot(dx, dy) || 1;
+      const push = (Math.random() - 0.5) * amp;
+      next.push([(ax + bx) / 2 - (dy / len) * push, (ay + by) / 2 + (dx / len) * push], points[i + 1]);
+    }
+    points = next;
+    amp *= 0.55;
+  }
+  return points;
+}
+
+function traceBolt(ctx, points, width, colour, blur) {
+  ctx.beginPath();
+  ctx.moveTo(points[0][0], points[0][1]);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i][0], points[i][1]);
+  ctx.lineWidth = width;
+  ctx.strokeStyle = colour;
+  ctx.shadowBlur = blur;
+  ctx.shadowColor = 'rgba(150,80,255,.95)';
+  ctx.stroke();
+}
+
+const IDLE_BOLTS = 3;
+const IDLE_GAP = [130, 430];
+const BOLT_LIFE = [150, 290];
+
+function TechnologyRing({ technologies }) {
+  const stageRef = useRef(null);
+  const backRef = useRef(null);
+  const frontRef = useRef(null);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    const layers = [backRef.current, frontRef.current];
+    if (!stage || layers.some((c) => !c)) return undefined;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const ctx = layers.map((c) => c.getContext('2d'));
+    const pointer = { x: 0, y: 0, live: false };
+    let bolts = [];
+    let frame = 0;
+    let onScreen = true;
+    let width = 0;
+    let height = 0;
+    let nextStrike = 0;
+
+    const resize = () => {
+      const box = stage.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      width = box.width;
+      height = box.height;
+      layers.forEach((c, i) => {
+        c.width = Math.round(width * dpr);
+        c.height = Math.round(height * dpr);
+        ctx[i].setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx[i].lineCap = 'round';
+        ctx[i].lineJoin = 'round';
+      });
+    };
+
+    const draw = (now) => {
+      frame = requestAnimationFrame(draw);
+      // Every layout read happens here, before any drawing, so the frame costs
+      // one style flush rather than one per element.
+      const stageBox = stage.getBoundingClientRect();
+      const coreEl = stage.querySelector('.technology-core-face');
+      const coreBox = coreEl?.getBoundingClientRect();
+      const logos = [...stage.querySelectorAll('.technology-logo')].map((el) => el.getBoundingClientRect());
+      if (!coreBox || !logos.length) return;
+
+      const core = { x: coreBox.left + coreBox.width / 2 - stageBox.left, y: coreBox.top + coreBox.height / 2 - stageBox.top, r: coreBox.width / 2 };
+      const spans = logos.map((r) => r.width);
+      const mid = (Math.min(...spans) + Math.max(...spans)) / 2;
+      const targets = logos.map((r) => ({
+        x: r.left + r.width / 2 - stageBox.left,
+        y: r.top + r.height / 2 - stageBox.top,
+        r: r.width / 2,
+        front: r.width >= mid   // a wider card is nearer the camera
+      }));
+
+      let attracted = -1;
+      if (pointer.live) {
+        let best = Infinity;
+        targets.forEach((t, i) => {
+          const d = Math.hypot(t.x - pointer.x, t.y - pointer.y);
+          if (d < best) { best = d; attracted = i; }
+        });
+      }
+
+      if (now >= nextStrike && bolts.length < IDLE_BOLTS) {
+        bolts.push({ target: Math.floor(Math.random() * targets.length), born: now, life: BOLT_LIFE[0] + Math.random() * (BOLT_LIFE[1] - BOLT_LIFE[0]), power: 0.5 });
+        nextStrike = now + IDLE_GAP[0] + Math.random() * (IDLE_GAP[1] - IDLE_GAP[0]);
+      }
+      if (attracted >= 0 && !bolts.some((b) => b.sustained)) bolts.push({ target: attracted, born: now, life: Infinity, power: 1, sustained: true });
+      bolts.forEach((b) => { if (b.sustained) { b.target = attracted; b.power = 1; } });
+      bolts = bolts.filter((b) => (b.sustained ? attracted >= 0 : now - b.born < b.life));
+
+      ctx.forEach((c) => c.clearRect(0, 0, width, height));
+      let idleGlow = 0;
+      let strikeGlow = 0;
+      for (const bolt of bolts) {
+        const t = targets[bolt.target];
+        if (!t) continue;
+        const dx = t.x - core.x, dy = t.y - core.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const ux = dx / dist, uy = dy / dist;
+        const x0 = core.x + ux * core.r * 0.9;
+        const y0 = core.y + uy * core.r * 0.9;
+        const x1 = t.x - ux * t.r * 1.02;   // stop at the logo's edge, never across it
+        const y1 = t.y - uy * t.r * 1.02;
+        const span = Math.hypot(x1 - x0, y1 - y0);
+        const age = bolt.sustained ? 1 : Math.sin(Math.PI * ((now - bolt.born) / bolt.life));
+        const alpha = Math.max(0, age) * (0.65 + Math.random() * 0.35) * bolt.power;
+        if (alpha <= 0.02) continue;
+        if (bolt.sustained) strikeGlow += alpha; else idleGlow += alpha;
+        const layer = ctx[t.front ? 1 : 0];
+        const path = forkedPath(x0, y0, x1, y1, span * 0.14);
+        traceBolt(layer, path, 3.4 * bolt.power, `rgba(150,80,255,${alpha * 0.55})`, 18);
+        traceBolt(layer, path, 1.3, `rgba(255,255,255,${alpha})`, 7);
+        if (Math.random() < 0.45) {
+          const at = path[Math.floor(path.length * (0.35 + Math.random() * 0.4))];
+          const spread = (Math.random() - 0.5) * 1.4;
+          const reach = span * (0.18 + Math.random() * 0.18);
+          traceBolt(layer, forkedPath(at[0], at[1], at[0] + (ux * Math.cos(spread) - uy * Math.sin(spread)) * reach, at[1] + (ux * Math.sin(spread) + uy * Math.cos(spread)) * reach, reach * 0.3), 1, `rgba(214,186,255,${alpha * 0.7})`, 6);
+        }
+      }
+      ctx.forEach((c) => { c.shadowBlur = 0; });
+      // The core lights up because it is firing, not on a timer of its own.
+      // Written after every read in the frame, so it never forces a reflow.
+      // Idle discharges only ripple the core; a pointer strike is what really
+      // lights it. Keeping the two apart stops the effect saturating at rest.
+      setCharge(coreEl, Math.min(1, idleGlow * 0.2 + strikeGlow * 0.85));
+    };
+
+    let lastCharge = -1;
+    const setCharge = (el, value) => {
+      const q = Math.round(value * 20) / 20;
+      if (q === lastCharge || !el) return;
+      lastCharge = q;
+      el.style.setProperty('--charge', String(q));
+    };
+
+    const start = () => { if (!frame && onScreen && !reduced.matches) frame = requestAnimationFrame(draw); };
+    const stop = () => {
+      cancelAnimationFrame(frame);
+      frame = 0;
+      bolts = [];
+      ctx.forEach((c) => c.clearRect(0, 0, width, height));
+      setCharge(stage.querySelector('.technology-core-face'), 0);
+    };
+
+    const track = (e) => {
+      const box = stage.getBoundingClientRect();
+      pointer.x = e.clientX - box.left;
+      pointer.y = e.clientY - box.top;
+    };
+    // Mouse reacts to hover; touch and pen only while pressed, so the ring never
+    // competes with scrolling. No preventDefault anywhere.
+    const onMove = (e) => { if (e.pointerType === 'mouse' || pointer.live) track(e); if (e.pointerType === 'mouse') pointer.live = true; };
+    const onLeave = (e) => { if (e.pointerType === 'mouse') pointer.live = false; };
+    const onDown = (e) => { if (e.pointerType !== 'mouse') { track(e); pointer.live = true; } };
+    const onUp = (e) => { if (e.pointerType !== 'mouse') pointer.live = false; };
+
+    stage.addEventListener('pointermove', onMove, { passive: true });
+    stage.addEventListener('pointerleave', onLeave, { passive: true });
+    stage.addEventListener('pointerdown', onDown, { passive: true });
+    window.addEventListener('pointerup', onUp, { passive: true });
+    window.addEventListener('pointercancel', onUp, { passive: true });
+
+    resize();
+    const ro = new ResizeObserver(resize);
+    ro.observe(stage);
+    const io = new IntersectionObserver(([entry]) => { onScreen = entry.isIntersecting; if (onScreen) start(); else stop(); });
+    io.observe(stage);
+    const onScheme = () => (reduced.matches ? stop() : start());
+    reduced.addEventListener('change', onScheme);
+    start();
+
+    return () => {
+      stop();
+      ro.disconnect();
+      io.disconnect();
+      reduced.removeEventListener('change', onScheme);
+      stage.removeEventListener('pointermove', onMove);
+      stage.removeEventListener('pointerleave', onLeave);
+      stage.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, []);
+
+  return (
+    <div className="technology-stage" ref={stageRef}>
+      <canvas className="technology-arcs is-back" ref={backRef} aria-hidden="true" />
+      <ul className="technology-ring" role="list"><li className="technology-core" aria-hidden="true"><div className="technology-core-face"><span className="technology-core-seal">Φ</span><span className="technology-core-label">EL SISTEMA</span></div></li>{technologies.map(([name, src], index) => <li className="technology-slot" key={name} style={{ '--i': index }}><div className="technology-billboard"><div className="technology-card"><span className="technology-index">{String(index + 1).padStart(2, '0')}</span><img className="technology-logo" src={src} alt={name} width="76" height="76" decoding="async" /><span className="technology-name">{name}</span></div></div></li>)}</ul>
+      <canvas className="technology-arcs is-front" ref={frontRef} aria-hidden="true" />
+    </div>
+  );
+}
+
 function TechnologyStrip() {
   return <section className="technologies" aria-labelledby="technologies-title"><div className="shell technologies-inner" data-reveal>
     <div className="technologies-heading"><p className="eyebrow"><span /> LAS HERRAMIENTAS ORBITAN</p><p id="technologies-title">Cambian cada mes y da igual: lo que permanece es el sistema que decide cuál usar, cuándo y para qué.</p></div>
-    <div className="technology-stage">
-      <ul className="technology-ring" role="list"><li className="technology-core" aria-hidden="true"><div className="technology-core-face"><span className="technology-core-seal">Φ</span><span className="technology-core-label">EL SISTEMA</span></div></li>{taughtTechnologies.map(([name, src], index) => <li className="technology-slot" key={name} style={{ '--i': index }}><div className="technology-billboard"><div className="technology-card"><span className="technology-index">{String(index + 1).padStart(2, '0')}</span><img className="technology-logo" src={src} alt={name} width="76" height="76" decoding="async" /><span className="technology-name">{name}</span></div></div></li>)}</ul>
-    </div>
+    <TechnologyRing technologies={taughtTechnologies} />
   </div></section>;
 }
 
