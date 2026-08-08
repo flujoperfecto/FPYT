@@ -116,14 +116,14 @@ function Hero() {
   return (
     <section className="hero shell" id="inicio">
       <div className="hero-copy reveal">
-        <p className="eyebrow"><span /> APRENDE IA CONSTRUYENDO</p>
-        <h1>Deja de mirar.<br /><em>Empieza a crear.</em></h1>
-        <p className="hero-lede">Skills, prompts y sistemas para convertir tus ideas en apps, agentes y negocios digitales reales.</p>
+        <p className="eyebrow"><span /> APRENDE IA APLICADA</p>
+        <h1>Deja de coleccionar herramientas.<br /><em>Empieza a diseñar sistemas.</em></h1>
+        <p className="hero-lede">No aprendas IA para saber hablar de ella. Aprende IA para saber qué hacer con ella: sistemas que te quitan el trabajo repetitivo y siguen en pie cuando cambia la herramienta de moda.</p>
         <div className="hero-actions">
           <a className="button primary" href="#biblioteca">Explorar la biblioteca <Arrow /></a>
           <a className="button ghost" href={channelUrl} target="_blank" rel="noreferrer">Ver en YouTube <Arrow diagonal /></a>
         </div>
-        <div className="proof-row"><span>En español</span><span>Paso a paso</span><span>Listo para usar</span></div>
+        <div className="proof-row"><span>En español</span><span>Paso a paso</span><span>Criterio, no trucos</span></div>
       </div>
       <div className="hero-art reveal delay" aria-hidden="true">
         <picture className="hero-visual">
@@ -151,9 +151,9 @@ const taughtTechnologies = [
 
 function TechnologyStrip() {
   return <section className="technologies" aria-labelledby="technologies-title"><div className="shell technologies-inner" data-reveal>
-    <div className="technologies-heading"><p className="eyebrow"><span /> TECNOLOGÍAS QUE ENSEÑAMOS</p><p id="technologies-title">Aprende a construir con las herramientas que están moviendo la IA.</p></div>
+    <div className="technologies-heading"><p className="eyebrow"><span /> LAS HERRAMIENTAS ORBITAN</p><p id="technologies-title">Cambian cada mes y da igual: lo que permanece es el sistema que decide cuál usar, cuándo y para qué.</p></div>
     <div className="technology-stage">
-      <ul className="technology-ring" role="list">{taughtTechnologies.map(([name, src], index) => <li className="technology-slot" key={name} style={{ '--i': index }}><div className="technology-billboard"><div className="technology-card"><span className="technology-index">{String(index + 1).padStart(2, '0')}</span><img className="technology-logo" src={src} alt={name} width="76" height="76" decoding="async" /><span className="technology-name">{name}</span></div></div></li>)}</ul>
+      <ul className="technology-ring" role="list"><li className="technology-core" aria-hidden="true"><div className="technology-core-face"><span className="technology-core-seal">Φ</span><span className="technology-core-label">EL SISTEMA</span></div></li>{taughtTechnologies.map(([name, src], index) => <li className="technology-slot" key={name} style={{ '--i': index }}><div className="technology-billboard"><div className="technology-card"><span className="technology-index">{String(index + 1).padStart(2, '0')}</span><img className="technology-logo" src={src} alt={name} width="76" height="76" decoding="async" /><span className="technology-name">{name}</span></div></div></li>)}</ul>
     </div>
   </div></section>;
 }
@@ -227,8 +227,8 @@ function Library() {
       <div className="shell">
         <div className="section-heading" data-reveal>
           <p className="eyebrow"><span /> BIBLIOTECA ABIERTA</p>
-          <h2>Encuentra. Adapta.<br /><em>Construye.</em></h2>
-          <p>Cada video se convierte en una ruta de construcción con capítulos y materiales entregados en el momento preciso.</p>
+          <h2>Encuentra. Adapta.<br /><em>Ponlo a trabajar.</em></h2>
+          <p>Cada video se convierte en un sistema que puedes operar: capítulos, decisiones y materiales entregados en el momento exacto.</p>
         </div>
         {showCatalogTools && <div className="library-tools" data-reveal>
           <label className="search"><span aria-hidden="true">⌕</span><input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar un tutorial..." aria-label="Buscar tutoriales" /></label>
@@ -251,8 +251,8 @@ function Classroom({ onOpen }) {
       <div className="shell">
         <div className="classroom-intro" data-reveal>
           <p className="eyebrow"><span /> NO ES OTRO VIDEO MÁS</p>
-          <h2>El video te inspira.<br /><em>El aula te ayuda a hacerlo.</em></h2>
-          <p>Cada capítulo conecta la explicación con el recurso exacto: prompts, instrucciones, skills y enlaces.</p>
+          <h2>Ver no es saber.<br /><em>El aula te hace ejecutar.</em></h2>
+          <p>Cada capítulo conecta la decisión con el material exacto: prompts, instrucciones, skills y enlaces. Nada suelto.</p>
         </div>
         <div className="classroom-frame" data-reveal>
           <div className="video-stage">
@@ -299,15 +299,15 @@ function MethodVisual({ step }) {
 
 function Method() {
   const steps = [
-    ['01', 'ΓΝΩΣΙΣ / GNOSIS', 'Entiende', 'El problema, la oportunidad y cada decisión explicados sin humo.'],
-    ['02', 'ΠΟΙΗΣΙΣ / POIESIS', 'Construye', 'Usa el video y sus materiales para producir un resultado verificable.'],
-    ['03', 'ΠΡΑΞΙΣ / PRAXIS', 'Lanza', 'Publica, mide una señal real y convierte lo aprendido en criterio propio.']
+    ['01', 'ΓΝΩΣΙΣ / GNOSIS', 'Observa', 'El proceso real, la fricción y dónde se te va el tiempo. Antes de tocar ninguna herramienta.'],
+    ['02', 'ΠΟΙΗΣΙΣ / POIESIS', 'Diseña', 'El sistema completo: entradas, decisiones, dónde entra la IA y dónde no.'],
+    ['03', 'ΠΡΑΞΙΣ / PRAXIS', 'Opera', 'Lo pones a correr, mides una señal real y lo afinas hasta que trabaja sin ti.']
   ];
   return (
     <section className="method section" id="metodo">
       <div className="method-atmosphere" aria-hidden="true"><i /><i /><i /><span /></div>
       <div className="shell">
-        <div className="method-head" data-reveal><p className="method-code">ΜΕΘΟΔΟΣ / SYSTEM 03</p><p className="eyebrow"><span /> EL MÉTODO FLUJO PERFECTO <span /></p><h2>Aprender es bueno.<br /><em>Publicar es mejor.</em></h2><div className="method-seal" aria-hidden="true">Φ</div></div>
+        <div className="method-head" data-reveal><p className="method-code">ΜΕΘΟΔΟΣ / SYSTEM 03</p><p className="eyebrow"><span /> EL MÉTODO FLUJO PERFECTO <span /></p><h2>Aprender es bueno.<br /><em>Que funcione solo es mejor.</em></h2><div className="method-seal" aria-hidden="true">Φ</div></div>
         <div className="method-grid" data-reveal>{steps.map(([n, inscription, title, text]) => <article key={n}><header><span>{n}</span><small>{inscription}</small></header><MethodVisual step={n} /><div className="method-copy"><h3>{title}</h3><p>{text}</p></div><b aria-hidden="true">✦</b></article>)}</div>
       </div>
     </section>
@@ -315,11 +315,11 @@ function Method() {
 }
 
 function FinalCta() {
-  return <section className="final-cta"><div className="cta-portal" aria-hidden="true"><i /><i /><i /><Mark /></div><div className="shell" data-reveal><p>LA PRÓXIMA IDEA NO SE CONSTRUYE SOLA</p><h2>No mires la revolución.<br /><em>Construye dentro de ella.</em></h2><a className="button light" href={channelUrl} target="_blank" rel="noreferrer">Unirme al canal <Arrow /></a></div></section>;
+  return <section className="final-cta"><div className="cta-portal" aria-hidden="true"><i /><i /><i /><Mark /></div><div className="shell" data-reveal><p>LA IA NO TE VA A ESPERAR</p><h2>La IA no reemplaza personas.<br /><em>Reemplaza a quien no sabe usarla.</em></h2><a className="button light" href={channelUrl} target="_blank" rel="noreferrer">Unirme al canal <Arrow /></a></div></section>;
 }
 
 function Footer() {
-  return <footer><div className="shell footer-grid"><a className="brand" href="#inicio"><Mark /><strong>FLUJO PERFECTO</strong></a><p>Apps, agentes y negocios digitales construidos con IA, paso a paso y en español.</p><div><a href="#biblioteca">Biblioteca</a><a href="#aula">Aula</a><a href={channelUrl}>YouTube ↗</a></div></div><div className="shell legal"><span>© 2026 FLUJO PERFECTO</span><span>CONSTRUYE CON IA</span></div></footer>;
+  return <footer><div className="shell footer-grid"><a className="brand" href="#inicio"><Mark /><strong>FLUJO PERFECTO</strong></a><p>Sistemas con IA que eliminan el trabajo repetitivo. En español y paso a paso.</p><div><a href="#biblioteca">Biblioteca</a><a href="#aula">Aula</a><a href={channelUrl}>YouTube ↗</a></div></div><div className="shell legal"><span>© {new Date().getFullYear()} FLUJO PERFECTO</span><span>DISEÑA SISTEMAS</span></div></footer>;
 }
 
 function ResourceDrawer({ item, onClose }) {
@@ -420,6 +420,6 @@ function NewsDrawer({ item, onClose }) {
 export default function App() {
   const [selected, setSelected] = useState(null);
   const [selectedNews, setSelectedNews] = useState(null);
-  useEffect(() => { document.title = 'Flujo Perfecto — Construye con IA'; }, []);
+  useEffect(() => { document.title = 'Flujo Perfecto — Diseña sistemas con IA que trabajan por ti'; }, []);
   return <><a className="skip-link" href="#contenido">Saltar al contenido</a><PageEffects /><Header /><main id="contenido"><Hero /><TechnologyStrip /><Library /><AiNewsTicker onOpen={setSelectedNews} /><Classroom onOpen={setSelected} /><Method /><FinalCta /></main><Footer /><ResourceDrawer item={selected} onClose={() => setSelected(null)} /><NewsDrawer item={selectedNews} onClose={() => setSelectedNews(null)} /></>;
 }

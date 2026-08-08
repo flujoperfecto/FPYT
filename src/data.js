@@ -110,7 +110,7 @@ Prioriza seguridad, reversibilidad y trazabilidad sobre autonomía total.`
 export const chapters = [
   {
     time: '00:00',
-    title: 'Empieza por el problema',
+    title: 'Empieza por el proceso',
     description: 'Cómo convertir una idea amplia en una acción concreta que alguien quiera completar.',
     resource: resources[0]
   },
