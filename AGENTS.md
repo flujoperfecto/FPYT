@@ -114,7 +114,7 @@ Tablas públicas:
 
 - `admin_users`: allowlist de administradores vinculada a `auth.users`.
 - `tutorials`: título, slug, descripción, YouTube, portada, estado, modalidad de acceso y contadores.
-- `chapters`: momentos ordenados por `position`, con `start_seconds`.
+- `chapters`: momentos ordenados por `position`, con `start_seconds`. La columna sigue siendo entera; el panel captura y muestra ese valor en formato YouTube (`mm:ss` o `h:mm:ss`) mediante `formatTime` y `parseTimecode` de `src/tutorialUtils.js`.
 - `resources`: materiales ordenados; tipos válidos `prompt`, `instruction`, `skill`, `link`, `file`.
 - `leads`: email normalizado, nombre, consentimiento y tutorial.
 - `tutorial_access`: relación entre usuario autenticado, tutorial y lead.
@@ -192,7 +192,8 @@ src/
   Turnstile.jsx       Carga y ejecución explícita de Turnstile.
   BrandMark.jsx       Única fuente del logo visible.
   data.js             Contenido local de demostración de la landing.
-  tutorialUtils.js    Slugs, rutas públicas, validación de YouTube y diff editorial.
+  tutorialUtils.js    Slugs, rutas públicas, validación de YouTube, marcas de
+                      tiempo (formatTime/parseTimecode) y diff editorial.
   usePageMeta.js      Hook que actualiza título, meta description, canonical,
                       Open Graph/Twitter y robots por ruta. Mejora la corrección para
                       navegadores reales y rastreadores que ejecutan JavaScript
