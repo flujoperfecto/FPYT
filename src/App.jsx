@@ -414,11 +414,18 @@ function Library() {
   const [videos, setVideos] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const load = useCallback(() => {
-    setLoading(true); setError('');
-    api('/api/videos').then(data => { setVideos(data); }).catch(errorValue => { setError(errorValue.message); }).finally(() => setLoading(false));
+  const load = useCallback((quiet = false) => {
+    if (!quiet) { setLoading(true); setError(''); }
+    api('/api/videos').then(data => { setVideos(data); setError(''); }).catch(errorValue => { if (!quiet) setError(errorValue.message); }).finally(() => { if (!quiet) setLoading(false); });
   }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    // Publicar, renombrar o cambiar la portada desde el panel debe verse al
+    // volver a esta pestaña, sin pedirle al visitante que recargue.
+    const revalidate = () => { if (document.visibilityState === 'visible') load(true); };
+    document.addEventListener('visibilitychange', revalidate);
+    return () => document.removeEventListener('visibilitychange', revalidate);
+  }, [load]);
   const visible = useMemo(() => videos.filter(video => `${video.title} ${video.description}`.toLowerCase().includes(query.toLowerCase())), [videos, query]);
   const showCatalogTools = videos.length > 1;
 
@@ -443,7 +450,7 @@ function Library() {
           <label className="search"><span aria-hidden="true">⌕</span><input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar un tutorial..." aria-label="Buscar tutoriales" /></label>
           <div className="library-promise" aria-label="Todos los tutoriales incluyen video, capítulos, materiales y progreso"><span>VIDEO</span><span>CAPÍTULOS</span><span>MATERIALES</span><span>PROGRESO</span></div>
         </div>}
-        {error && <div className="empty-state" role="alert">No se pudieron cargar los tutoriales. <button className="text-button" onClick={load}>Reintentar</button></div>}
+        {error && <div className="empty-state" role="alert">No se pudieron cargar los tutoriales. <button className="text-button" onClick={() => load()}>Reintentar</button></div>}
         {!error && !loading && <div className={showCatalogTools ? 'result-count' : 'featured-route-label'} aria-live="polite"><span>{showCatalogTools ? String(visible.length).padStart(2, '0') : 'RUTA 01'}</span> {showCatalogTools ? 'TUTORIALES DISPONIBLES' : 'EMPIEZA POR AQUÍ'}</div>}
         {!error && (loading ? <div className="tutorial-grid" aria-label="Cargando tutoriales" aria-busy="true"><article className="tutorial-card tutorial-skeleton"><div /><div><i /><i /><i /></div></article></div> : <div className="tutorial-grid">{cards}</div>)}
         {!error && !loading && !visible.length && <div className="empty-state">No hay tutoriales publicados con esa búsqueda.</div>}

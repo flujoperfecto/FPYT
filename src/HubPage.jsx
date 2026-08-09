@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RESOURCE_LABELS, api, copyText, downloadResource, formatTime, youtubeId } from './api.js';
 import Mark from './BrandMark.jsx';
 import usePageMeta from './usePageMeta.js';
+import PortalNotice from './PortalNotice.jsx';
 
 let youtubeApiPromise;
 
@@ -105,7 +106,7 @@ export default function HubPage({ slug, preview = false }) {
   const [video, setVideo] = useState(null);
   const [active, setActive] = useState(0);
   const [completed, setCompleted] = useState([]);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(null);
   const [resumeNotice, setResumeNotice] = useState(null);
   const [resourceCue, setResourceCue] = useState(null);
   const playerRef = useRef(null);
@@ -114,10 +115,10 @@ export default function HubPage({ slug, preview = false }) {
   const timelineRef = useRef(null);
 
   usePageMeta({
-    title: video?.title,
+    title: video?.title || (error ? (error.status === 404 ? 'Tutorial no disponible' : 'No pudimos abrir el aula') : 'Preparando el aula'),
     description: video ? `${video.title}: aula interactiva con línea de tiempo, prompts y materiales, capítulo a capítulo.` : undefined,
     path: `/hub/${slug}`,
-    noindex: preview,
+    noindex: preview || Boolean(error) || Boolean(video && !video.chapters?.length),
   });
 
   useEffect(() => {
@@ -135,8 +136,10 @@ export default function HubPage({ slug, preview = false }) {
       activeRef.current = resumeIndex;
       if (validCompleted.length && firstIncomplete >= 0) setResumeNotice({ index: resumeIndex, title: data.chapters[resumeIndex]?.title });
     }).catch(errorValue => {
-      if (errorValue.status === 401) window.location.assign(errorValue.data.redirect);
-      else setError(errorValue.message);
+      // Un cambio de URL o de modalidad de acceso en el panel llega aquí como
+      // redirección: el visitante nunca debe quedarse frente a un 404 mudo.
+      if (errorValue.data?.redirect) window.location.replace(errorValue.data.redirect);
+      else setError({ status: errorValue.status, message: errorValue.message });
     });
   }, [preview, slug]);
 
@@ -176,9 +179,29 @@ export default function HubPage({ slug, preview = false }) {
     cueTimerRef.current = window.setTimeout(() => setResourceCue(null), 4200);
   }, [video]);
 
-  if (error) return <div className="portal-status">{error}</div>;
+  if (error) {
+    return error.status === 404
+      ? <PortalNotice
+        code="AULA / 404"
+        title={<>Este tutorial ya no vive<br /><em>en esta dirección.</em></>}
+        message="Puede haber cambiado de nombre, volver a estar en preparación o haberse retirado. La biblioteca siempre muestra las rutas vigentes."
+        hint="Si guardaste este enlace, reemplázalo por el que aparece ahora en la biblioteca."
+      />
+      : <PortalNotice
+        code="AULA / ERROR"
+        title={<>No pudimos abrir<br /><em>el aula.</em></>}
+        message={error.message}
+        onRetry={() => window.location.reload()}
+      />;
+  }
   if (!video) return <div className="portal-status">Preparando el aula…</div>;
-  if (!chapter) return <div className="portal-status">Este tutorial aún no tiene momentos publicados.</div>;
+  if (!chapter) {
+    return <PortalNotice
+      code="AULA / EN CONSTRUCCIÓN"
+      title={<>Esta ruta todavía<br /><em>se está construyendo.</em></>}
+      message="El tutorial está publicado, pero aún no tiene momentos ni materiales cargados. Vuelve en unas horas."
+    />;
+  }
 
   return <main className="hub-page">
     {preview && <div className="preview-banner"><strong>Vista previa del administrador</strong><span>Este contenido todavía puede estar oculto para tus suscriptores.</span><a href="/admin">Volver al panel</a></div>}

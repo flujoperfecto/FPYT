@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 
 const SITE_ORIGIN = 'https://www.flujoperfecto.com';
-const DEFAULT_TITLE = 'Flujo Perfecto — Construye con IA';
-const DEFAULT_DESCRIPTION = 'Skills, prompts y sistemas para construir apps, agentes y negocios reales con inteligencia artificial.';
+const DEFAULT_TITLE = 'Flujo Perfecto — Diseña sistemas con IA que trabajan por ti';
+const DEFAULT_DESCRIPTION = 'No aprendas IA para saber hablar de ella. Tutoriales en español para diseñar sistemas que eliminan tareas repetitivas y siguen funcionando aunque cambien las herramientas.';
 
 function upsertMeta(attribute, key, content) {
   let tag = document.head.querySelector(`meta[${attribute}="${key}"]`);

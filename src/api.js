@@ -1,4 +1,7 @@
 import { requireSupabase } from './supabase.js';
+import { describeTutorialChanges, slugify, tutorialAccessPayload, tutorialPublicPath, youtubeId } from './tutorialUtils.js';
+
+export { TUTORIAL_CHANGE_FIELDS, describeTutorialChanges, tutorialPublicPath, youtubeId } from './tutorialUtils.js';
 
 const tutorialFields = 'id,title,slug,description,youtube_url,cover_url,cover_storage_path,status,access_mode,chapter_count,resource_count,created_at,updated_at';
 const chapterFields = 'id,tutorial_id,position,title,start_seconds,description,created_at,updated_at';
@@ -31,7 +34,7 @@ function authErrorMessage(message = '') {
 
 function throwIfError(error) {
   if (!error) return;
-  const status = Number(error.status || (error.code === 'PGRST116' ? 404 : 400));
+  const status = Number(error.status || (error.code === 'PGRST116' ? 404 : error.code === '23505' ? 409 : 400));
   throw requestError(error.message, status, { code: error.code, details: error.details });
 }
 
@@ -138,6 +141,38 @@ async function latestAiNews() {
   };
 }
 
+// El historial de slugs se consulta mediante una RPC exacta: los visitantes
+// pueden resolver un enlace conocido, pero no enumerar las direcciones antiguas.
+// El fallback mantiene el frontend compatible durante un despliegue escalonado.
+let slugHistorySupported = true;
+
+async function movedTutorial(client, slug) {
+  if (!slugHistorySupported || !slug) return null;
+  const { data, error } = await client
+    .rpc('resolve_tutorial_slug', { p_slug: slug })
+    .maybeSingle();
+  if (error) {
+    if (error.code === '42883' || error.code === 'PGRST202') {
+      slugHistorySupported = false;
+      return null;
+    }
+    throwIfError(error);
+  }
+  if (!data) return null;
+  return { slug: data.slug, accessMode: data.access_mode };
+}
+
+async function missingTutorialError(client, slug, surface) {
+  const moved = await movedTutorial(client, slug);
+  if (!moved) return requestError('Tutorial no encontrado.', 404);
+  const redirect = surface === 'hub'
+    ? `/hub/${moved.slug}`
+    : surface === 'materials'
+      ? `/materiales/${moved.slug}`
+      : tutorialPublicPath(moved);
+  return requestError('Este tutorial cambió de dirección.', 404, { redirect, reason: 'slug-changed' });
+}
+
 async function publishedTutorials() {
   const client = requireSupabase();
   const { data, error } = await client.from('tutorials').select(tutorialFields).eq('status', 'published').order('updated_at', { ascending: false });
@@ -149,15 +184,15 @@ async function tutorialBySlug(slug) {
   const client = requireSupabase();
   const { data, error } = await client.from('tutorials').select(tutorialFields).eq('slug', slug).eq('status', 'published').maybeSingle();
   throwIfError(error);
-  if (!data) throw requestError('Tutorial no encontrado.', 404);
+  if (!data) throw await missingTutorialError(client, slug, 'access');
   return tutorialSummary(data);
 }
 
-async function hubTutorial(slug) {
+async function hubTutorial(slug, surface = 'hub') {
   const client = requireSupabase();
   const { data: tutorialRow, error: tutorialError } = await client.from('tutorials').select(tutorialFields).eq('slug', slug).eq('status', 'published').maybeSingle();
   throwIfError(tutorialError);
-  if (!tutorialRow) throw requestError('Tutorial no encontrado.', 404);
+  if (!tutorialRow) throw await missingTutorialError(client, slug, surface);
 
   const { data: chapterRows, error: chapterError } = await client.from('chapters').select(chapterFields).eq('tutorial_id', tutorialRow.id).order('position');
   throwIfError(chapterError);
@@ -178,9 +213,20 @@ async function hubTutorial(slug) {
 
 async function adminPreviewTutorial(slug) {
   const client = requireSupabase();
-  const { data: tutorialRow, error: tutorialError } = await client.from('tutorials').select(tutorialFields).eq('slug', slug).maybeSingle();
+  let { data: tutorialRow, error: tutorialError } = await client.from('tutorials').select(tutorialFields).eq('slug', slug).maybeSingle();
   throwIfError(tutorialError);
-  if (!tutorialRow) throw requestError('Tutorial no encontrado.', 404);
+  if (!tutorialRow) {
+    const historyResult = await client.from('tutorial_slug_history').select('tutorial_id').eq('slug', slug).maybeSingle();
+    throwIfError(historyResult.error);
+    if (!historyResult.data) throw requestError('Tutorial no encontrado.', 404);
+    const currentResult = await client.from('tutorials').select(tutorialFields).eq('id', historyResult.data.tutorial_id).maybeSingle();
+    throwIfError(currentResult.error);
+    if (!currentResult.data) throw requestError('Tutorial no encontrado.', 404);
+    throw requestError('Este tutorial cambió de dirección.', 404, {
+      redirect: `/hub/${currentResult.data.slug}?preview=1`,
+      reason: 'slug-changed',
+    });
+  }
 
   const { data: chapterRows, error: chapterError } = await client.from('chapters').select(chapterFields).eq('tutorial_id', tutorialRow.id).order('position');
   throwIfError(chapterError);
@@ -217,7 +263,28 @@ async function adminHierarchy() {
     throwIfError(result.error);
     resourceRows = result.data;
   }
-  return tutorialRows.map(row => mapTutorial(row, chapterRows, resourceRows));
+
+  // PostgREST limita por defecto las respuestas grandes. Paginar evita que el
+  // impacto mostrado por el panel se quede silenciosamente en los primeros
+  // 1.000 suscriptores y mutar el acumulador evita un reduce cuadrático.
+  const subscribersByTutorial = Object.create(null);
+  const pageSize = 1000;
+  let lastLeadId = '';
+  for (;;) {
+    let leadQuery = client
+      .from('leads')
+      .select('id,tutorial_id')
+      .order('id')
+      .limit(pageSize);
+    if (lastLeadId) leadQuery = leadQuery.gt('id', lastLeadId);
+    const { data: leadRows, error: leadError } = await leadQuery;
+    throwIfError(leadError);
+    leadRows.forEach(item => { subscribersByTutorial[item.tutorial_id] = (subscribersByTutorial[item.tutorial_id] || 0) + 1; });
+    if (leadRows.length < pageSize) break;
+    lastLeadId = leadRows.at(-1).id;
+  }
+
+  return tutorialRows.map(row => ({ ...mapTutorial(row, chapterRows, resourceRows), subscribers: subscribersByTutorial[row.id] || 0 }));
 }
 
 async function adminOverview() {
@@ -243,17 +310,22 @@ async function adminOverview() {
   };
 }
 
-function slugify(value = '') {
-  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-}
-
 async function availableSlug(client, value, excludeId = '') {
   const base = slugify(value) || `tutorial-${Date.now().toString().slice(-6)}`;
-  let query = client.from('tutorials').select('id').eq('slug', base);
-  if (excludeId) query = query.neq('id', excludeId);
-  const { data, error } = await query.maybeSingle();
-  throwIfError(error);
-  return data ? `${base}-${Date.now().toString().slice(-5)}` : base;
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const candidate = attempt ? `${base}-${attempt + 1}` : base;
+    let currentQuery = client.from('tutorials').select('id').eq('slug', candidate);
+    if (excludeId) currentQuery = currentQuery.neq('id', excludeId);
+    const [currentResult, historyResult] = await Promise.all([
+      currentQuery.maybeSingle(),
+      client.from('tutorial_slug_history').select('tutorial_id').eq('slug', candidate).maybeSingle(),
+    ]);
+    throwIfError(currentResult.error);
+    throwIfError(historyResult.error);
+    const reservedByAnotherTutorial = historyResult.data && historyResult.data.tutorial_id !== excludeId;
+    if (!currentResult.data && !reservedByAnotherTutorial) return candidate;
+  }
+  throw requestError('No se pudo reservar una URL pública única. Prueba con un nombre más específico.', 409);
 }
 
 async function createTutorial(body) {
@@ -268,22 +340,64 @@ async function createTutorial(body) {
 
 async function updateTutorial(videoId, body) {
   const client = requireSupabase();
-  const slug = slugify(body.slug);
-  if (!slug) throw requestError('La URL pública no puede quedar vacía.');
+  const { data: current, error: currentError } = await client.from('tutorials').select(tutorialFields).eq('id', videoId).single();
+  throwIfError(currentError);
+
   const title = String(body.title || '').trim();
   if (!title) throw requestError('El título es obligatorio.');
+
+  const requestedSlug = String(body.slug || '').trim();
+  const slug = slugify(requestedSlug);
+  if (!slug) throw requestError('La URL pública no puede quedar vacía. Usa letras, números y guiones.');
+  if (slug !== current.slug) {
+    const [takenResult, historyResult] = await Promise.all([
+      client.from('tutorials').select('id,title').eq('slug', slug).neq('id', videoId).maybeSingle(),
+      client.from('tutorial_slug_history').select('tutorial_id').eq('slug', slug).maybeSingle(),
+    ]);
+    throwIfError(takenResult.error);
+    throwIfError(historyResult.error);
+    const taken = takenResult.data;
+    if (taken) throw requestError(`La dirección «${slug}» ya la usa el tutorial “${taken.title}”. Elige otra URL pública.`, 409);
+    if (historyResult.data && historyResult.data.tutorial_id !== videoId) {
+      throw requestError(`La dirección «${slug}» pertenece al historial de otro tutorial. Elige otra URL pública.`, 409);
+    }
+  }
+
+  const youtubeUrl = String(body.youtubeUrl || '').trim();
+  if (youtubeUrl && !youtubeId(youtubeUrl)) {
+    throw requestError('La URL de YouTube no es válida. Usa un enlace de youtube.com/watch, youtu.be, /embed o /shorts.');
+  }
+
+  // Escribir una portada externa deja huérfano el archivo subido al bucket.
+  const coverUrl = String(body.coverUrl || '').trim() || '/images/flujo-classroom.webp';
+  const replacesManagedCover = Boolean(current.cover_storage_path) && coverUrl !== current.cover_url;
+
   const payload = {
     title,
     slug,
     description: String(body.description || '').trim(),
-    youtube_url: String(body.youtubeUrl || '').trim(),
-    cover_url: String(body.coverUrl || '').trim(),
+    youtube_url: youtubeUrl,
+    cover_url: coverUrl,
     status: body.status,
     access_mode: body.accessMode,
   };
+  if (replacesManagedCover) payload.cover_storage_path = '';
+
   const { data, error } = await client.from('tutorials').update(payload).eq('id', videoId).select(tutorialFields).single();
   throwIfError(error);
-  return mapTutorial(data);
+
+  let warning = '';
+  if (replacesManagedCover) {
+    const cleanup = await client.storage.from('tutorial-covers').remove([current.cover_storage_path]);
+    if (cleanup.error) warning = 'Se guardó la nueva portada, pero la imagen anterior quedó en Storage y necesita limpieza manual.';
+  }
+
+  return {
+    ...mapTutorial(data),
+    changes: describeTutorialChanges(tutorialSummary(current), tutorialSummary(data)),
+    normalizedSlug: requestedSlug && requestedSlug !== slug ? { requested: requestedSlug, applied: slug } : null,
+    warning,
+  };
 }
 
 async function nextPosition(table, parentKey, parentId) {
@@ -598,7 +712,7 @@ async function subscriberAccess(body) {
   }
 
   const { data, error } = await client.functions.invoke('grant-tutorial-access', {
-    body: { slug: body.slug, name: body.name, email: body.email, consent: body.consent, website: body.website },
+    body: tutorialAccessPayload(body),
   });
   if (error) {
     let message = error.message;
@@ -670,6 +784,7 @@ export async function api(path, options = {}) {
   if (method === 'GET' && path === '/api/videos') return publishedTutorials();
   if (method === 'GET' && /^\/api\/videos\/[^/]+$/.test(path)) return tutorialBySlug(decodeURIComponent(path.split('/').pop()));
   if (method === 'GET' && /^\/api\/hub\/[^/]+$/.test(path)) return hubTutorial(decodeURIComponent(path.split('/').pop()));
+  if (method === 'GET' && /^\/api\/materials\/[^/]+$/.test(path)) return hubTutorial(decodeURIComponent(path.split('/').pop()), 'materials');
   if (method === 'POST' && path === '/api/access') return subscriberAccess(body);
   if (method === 'GET' && path === '/api/admin/status') return { authenticated: await isAdmin() };
   if (method === 'POST' && path === '/api/admin/login') return adminLogin(body);
@@ -713,10 +828,6 @@ export function formatTime(seconds = 0) {
   const minutes = Math.floor((total % 3600) / 60);
   const rest = total % 60;
   return hours ? `${hours}:${String(minutes).padStart(2, '0')}:${String(rest).padStart(2, '0')}` : `${String(minutes).padStart(2, '0')}:${String(rest).padStart(2, '0')}`;
-}
-
-export function youtubeId(url = '') {
-  return url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([^?&/]+)/)?.[1] || '';
 }
 
 export async function copyText(text) {

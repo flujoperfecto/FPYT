@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RESOURCE_LABELS, api, copyText, downloadResource, downloadTextFile, formatTime, safeFileName, youtubeId } from './api.js';
 import Mark from './BrandMark.jsx';
 import usePageMeta from './usePageMeta.js';
+import PortalNotice from './PortalNotice.jsx';
 
 const READABLE = ['prompt', 'instruction', 'skill'];
 const FILE_ICONS = { pdf: 'PDF', zip: 'ZIP', rar: 'ZIP', doc: 'DOC', docx: 'DOC', txt: 'TXT', md: 'MD', csv: 'CSV', xlsx: 'XLS', png: 'IMG', jpg: 'IMG', jpeg: 'IMG', webp: 'IMG', svg: 'SVG', mp3: 'AUD', mp4: 'VID', json: 'JSON' };
@@ -104,20 +105,23 @@ function MaterialCard({ item, onOpen }) {
 
 export default function MaterialsPage({ slug }) {
   const [video, setVideo] = useState(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(null);
   const [openItem, setOpenItem] = useState(null);
 
   useEffect(() => {
-    api(`/api/hub/${slug}`).then(setVideo).catch(errorValue => {
-      if (errorValue.status === 401) window.location.assign(errorValue.data.redirect);
-      else setError(errorValue.message);
+    api(`/api/materials/${slug}`).then(setVideo).catch(errorValue => {
+      if (errorValue.data?.redirect) window.location.replace(errorValue.data.redirect);
+      else setError({ status: errorValue.status, message: errorValue.message });
     });
   }, [slug]);
 
   usePageMeta({
-    title: video?.title ? `Materiales · ${video.title}` : 'Materiales del video',
+    title: error
+      ? (error.status === 404 ? 'Materiales no disponibles' : 'No pudimos abrir los materiales')
+      : video?.title ? `Materiales · ${video.title}` : 'Materiales del video',
     description: video ? `Prompts, skills y archivos del video “${video.title}”, en el mismo orden en que aparecen.` : undefined,
     path: `/materiales/${slug}`,
+    noindex: Boolean(error) || Boolean(video && !video.chapters?.length),
   });
 
   const closeModal = useCallback(() => setOpenItem(null), []);
@@ -125,7 +129,21 @@ export default function MaterialsPage({ slug }) {
   const totalResources = useMemo(() => video?.chapters?.reduce((sum, item) => sum + item.resources.length, 0) || 0, [video]);
   const watchAt = seconds => (videoId ? `https://www.youtube.com/watch?v=${videoId}&t=${seconds}s` : video?.youtubeUrl || '#');
 
-  if (error) return <div className="portal-status">{error}</div>;
+  if (error) {
+    return error.status === 404
+      ? <PortalNotice
+        code="MATERIALES / 404"
+        title={<>Estos materiales ya no viven<br /><em>en esta dirección.</em></>}
+        message="El tutorial puede haber cambiado de nombre, volver a estar en preparación o haberse retirado."
+        hint="La biblioteca siempre muestra las rutas vigentes."
+      />
+      : <PortalNotice
+        code="MATERIALES / ERROR"
+        title={<>No pudimos preparar<br /><em>los materiales.</em></>}
+        message={error.message}
+        onRetry={() => window.location.reload()}
+      />;
+  }
   if (!video) return <div className="portal-status" role="status"><i /> Preparando los materiales…</div>;
 
   return <main className="materials-page">

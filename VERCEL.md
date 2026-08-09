@@ -1,6 +1,6 @@
 # Despliegue en Vercel
 
-El repositorio está preparado como una SPA de Vite. `vercel.json` fija el build, la salida `dist`, las cabeceras HTTP y el fallback a `index.html` necesario para abrir directamente `/admin`, `/acceso/:slug` y `/hub/:slug`.
+El repositorio está preparado como una SPA de Vite. `vercel.json` fija el build, la salida `dist`, las cabeceras HTTP y el fallback a `index.html` necesario para abrir directamente `/admin`, `/acceso/:slug`, `/materiales/:slug` y `/hub/:slug`.
 
 ## 1. Proyecto conectado
 
@@ -69,7 +69,7 @@ La Edge Function acepta un único `APP_ORIGIN` exacto y Turnstile restringe host
 
 Después del deployment de producción verifica:
 
-- `/`, `/admin`, `/acceso/idea-a-app-con-ia` y `/hub/idea-a-app-con-ia` cargan también al refrescar la página.
+- `/`, `/admin`, `/acceso/idea-a-app-con-ia`, `/materiales/idea-a-app-con-ia` y `/hub/idea-a-app-con-ia` cargan también al refrescar la página.
 - La Biblioteca obtiene el tutorial publicado.
 - Turnstile permite crear una sesión anónima.
 - El acceso por email abre capítulos y recursos protegidos.
