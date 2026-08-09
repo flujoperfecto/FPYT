@@ -5,6 +5,7 @@ import Mark from './BrandMark.jsx';
 const AccessPage = lazy(() => import('./AccessPage.jsx'));
 const HubPage = lazy(() => import('./HubPage.jsx'));
 const AdminPage = lazy(() => import('./AdminPage.jsx'));
+const MaterialsPage = lazy(() => import('./MaterialsPage.jsx'));
 
 function NotFound() {
   useEffect(() => { document.title = 'Página no encontrada — Flujo Perfecto'; }, []);
@@ -18,6 +19,7 @@ export default function Router() {
   if (path === '/') page = <App />;
   else if (path === '/admin') page = <AdminPage />;
   else if (path.startsWith('/acceso/')) page = <AccessPage slug={decodeURIComponent(path.split('/')[2] || '')} />;
+  else if (path.startsWith('/materiales/')) page = <MaterialsPage slug={decodeURIComponent(path.split('/')[2] || '')} />;
   else if (path.startsWith('/hub/')) page = <HubPage slug={decodeURIComponent(path.split('/')[2] || '')} preview={query.get('preview') === '1'} />;
   else page = <NotFound />;
   return <Suspense fallback={<div className="portal-status" role="status"><i /> Preparando la experiencia…</div>}>{page}</Suspense>;

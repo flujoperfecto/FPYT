@@ -303,7 +303,7 @@ async function updateChapter(chapterId, body) {
   return mapChapter(data);
 }
 
-function safeFileName(value = 'archivo') {
+export function safeFileName(value = 'archivo') {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'archivo';
 }
 
@@ -633,6 +633,19 @@ export async function downloadResource(item) {
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
+}
+
+export function downloadTextFile(filename, text) {
+  const url = URL.createObjectURL(new Blob([text ?? ''], { type: 'text/markdown;charset=utf-8' }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = safeFileName(filename);
+  anchor.rel = 'noreferrer';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  // El objeto se libera tras el tick para que Safari alcance a iniciar la descarga.
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export async function api(path, options = {}) {

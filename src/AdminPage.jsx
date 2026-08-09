@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RESOURCE_LABELS, api, formatTime, youtubeId } from './api.js';
+import { RESOURCE_LABELS, api, copyText, formatTime, youtubeId } from './api.js';
 import TurnstileSlot, { useTurnstile } from './Turnstile.jsx';
 import Mark from './BrandMark.jsx';
 
@@ -71,7 +71,13 @@ function VideoListPanel({ videos, filteredVideos, query, setQuery, statusFilter,
 }
 
 function VideoEditorHeader({ selected, dirty, busy, onDuplicate, onDelete }) {
-  return <div className="editor-head"><div><span>EDITANDO {dirty && <b className="dirty-dot">CAMBIOS PENDIENTES</b>}</span><h2>{selected.title}</h2></div><div className="editor-actions"><a href={`/hub/${selected.slug}?preview=1`} target="_blank" rel="noreferrer">Vista previa ↗</a><button onClick={onDuplicate} disabled={Boolean(busy)}>{busy === 'duplicate-video' ? 'Duplicando…' : 'Duplicar'}</button><button className="danger" onClick={onDelete} disabled={Boolean(busy)}>Eliminar</button></div></div>;
+  const [copied, setCopied] = useState(false);
+  const copyMaterialsLink = async () => {
+    await copyText(`${window.location.origin}/materiales/${selected.slug}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  };
+  return <div className="editor-head"><div><span>EDITANDO {dirty && <b className="dirty-dot">CAMBIOS PENDIENTES</b>}</span><h2>{selected.title}</h2></div><div className="editor-actions"><a href={`/hub/${selected.slug}?preview=1`} target="_blank" rel="noreferrer">Vista previa ↗</a><button onClick={copyMaterialsLink} title="Link para pegar en la descripción de YouTube">{copied ? 'Copiado ✓' : 'Link de materiales'}</button><button onClick={onDuplicate} disabled={Boolean(busy)}>{busy === 'duplicate-video' ? 'Duplicando…' : 'Duplicar'}</button><button className="danger" onClick={onDelete} disabled={Boolean(busy)}>Eliminar</button></div></div>;
 }
 
 function VideoForm({ selected, draft, dirty, busy, setField, onSubmit, onDiscard, onUploadCover, onRemoveCover }) {
