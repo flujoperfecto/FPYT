@@ -14,6 +14,21 @@ function requestError(message, status = 400, data = {}) {
   return error;
 }
 
+// GoTrue devuelve el error crudo de Cloudflare o del proveedor. Traducirlo aquí
+// evita perder una tarde averiguando que solo faltaba emparejar dos llaves.
+function authErrorMessage(message = '') {
+  const raw = message.toLowerCase();
+  if (raw.includes('invalid-input-response') || raw.includes('invalid-input-secret')) {
+    return 'La verificación de seguridad no coincide: la site key de Turnstile del sitio y el secreto guardado en Supabase pertenecen a widgets distintos. Revisa Authentication → Attack Protection → CAPTCHA protection.';
+  }
+  if (raw.includes('timeout-or-duplicate')) return 'La verificación de seguridad caducó. Recarga la página e inténtalo otra vez.';
+  if (raw.includes('anonymous sign-ins are disabled')) {
+    return 'El acceso por email necesita las sesiones anónimas activadas en Supabase (Authentication → Sign In / Providers → Allow anonymous sign-ins).';
+  }
+  if (raw.includes('invalid login credentials')) return 'Correo o contraseña incorrectos.';
+  return message;
+}
+
 function throwIfError(error) {
   if (!error) return;
   const status = Number(error.status || (error.code === 'PGRST116' ? 404 : 400));
@@ -578,7 +593,7 @@ async function subscriberAccess(body) {
   if (!sessionData.session) {
     if (!body.captchaToken) throw requestError('No se pudo completar la verificación de seguridad.');
     const result = await client.auth.signInAnonymously({ options: { captchaToken: body.captchaToken } });
-    throwIfError(result.error);
+    if (result.error) throw requestError(authErrorMessage(result.error.message), Number(result.error.status || 400));
     sessionData = result.data;
   }
 
@@ -593,7 +608,7 @@ async function subscriberAccess(body) {
       message = details.error || details.message || message;
       status = error.context.status;
     }
-    throw requestError(message, status);
+    throw requestError(authErrorMessage(message), status);
   }
   return data;
 }
@@ -605,7 +620,7 @@ async function adminLogin(body) {
     password: body.password || '',
     options: body.captchaToken ? { captchaToken: body.captchaToken } : undefined,
   });
-  throwIfError(error);
+  if (error) throw requestError(authErrorMessage(error.message), Number(error.status || 400));
   if (!await isAdmin()) {
     await client.auth.signOut({ scope: 'local' });
     throw requestError('Esta cuenta no tiene permisos de administrador.', 403);

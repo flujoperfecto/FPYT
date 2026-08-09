@@ -151,6 +151,17 @@ button:disabled { opacity: .45; cursor: not-allowed !important; }
   .resource-cue,.portal-status i { animation: none; }
 }
 
+/* Los campos viven dentro de su <label>, y `input { font: inherit }` les
+   heredaba los 8-9px del rótulo en mayúsculas. El rótulo sigue pequeño a
+   propósito; lo que se escribe, no. */
+.gate-form-inner input:not([type=checkbox]),.admin-login input { font-size: 15px; }
+.video-form input,.video-form textarea,.video-form select,.chapter-editor input,.resource-form input,.resource-form select { min-height: 44px; font-size: 14px; line-height: 1.5; }
+.resource-form textarea { padding: 12px; font: 13px/1.7 "Cascadia Code", Consolas, monospace; }
+.video-form textarea { line-height: 1.6; }
+.catalog-tools input,.catalog-tools select { height: 38px; font-size: 12px; }
+.video-form label,.chapter-editor label,.resource-form label { font-size: 9px; }
+.admin-login input,.gate-form-inner input:not([type=checkbox]) { min-height: 52px; }
+
 /* Materiales — entrega de recursos para quien sigue el video en YouTube. */
 .materials-page { min-height: 100vh; position: relative; background: #09070e; }
 .materials-header { height: 74px; padding: 0 max(24px, calc((100vw - 1400px)/2)); display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,.07); background: rgba(9,7,14,.42); backdrop-filter: blur(15px); position: sticky; top: 0; z-index: 12; }

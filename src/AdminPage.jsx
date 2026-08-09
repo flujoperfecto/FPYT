@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RESOURCE_LABELS, api, copyText, formatTime, youtubeId } from './api.js';
 import TurnstileSlot, { useTurnstile } from './Turnstile.jsx';
 import Mark from './BrandMark.jsx';
@@ -126,6 +126,7 @@ export default function AdminPage() {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [accessFilter, setAccessFilter] = useState('all');
+  const savedRef = useRef(null);
 
   useEffect(() => { document.title = 'Panel editorial — Flujo Perfecto'; }, []);
 
@@ -146,7 +147,25 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => { api('/api/admin/status').then(async result => { setAuthenticated(result.authenticated); if (result.authenticated) await load(); }).catch(errorValue => { setAuthenticated(false); setNotice({ type: 'error', text: errorValue.message }); }); }, [load]);
-  useEffect(() => { if (selected) { setDraft({ ...selected }); setChapterId(current => selected.chapters.some(item => item.id === current) ? current : selected.chapters[0]?.id || ''); } else setDraft(null); }, [selected]);
+  // Subir una portada o tocar los momentos recarga el catálogo y devuelve un
+  // `selected` nuevo. Reemplazar el borrador completo aquí borraba lo que el
+  // editor estaba escribiendo, así que solo cedemos los campos que él no tocó.
+  useEffect(() => {
+    if (!selected) { savedRef.current = null; setDraft(null); return; }
+    // Se lee antes de encolar la actualización: el updater corre durante el
+    // render, cuando el ref ya apuntaría a la versión nueva.
+    const saved = savedRef.current;
+    savedRef.current = selected;
+    setDraft(current => {
+      if (!current || current.id !== selected.id || saved?.id !== selected.id) return { ...selected };
+      const merged = { ...selected };
+      editableFields.forEach(field => {
+        if (String(current[field] ?? '') !== String(saved[field] ?? '')) merged[field] = current[field];
+      });
+      return merged;
+    });
+    setChapterId(current => selected.chapters.some(item => item.id === current) ? current : selected.chapters[0]?.id || '');
+  }, [selected]);
   useEffect(() => {
     const warn = event => { if (dirty) { event.preventDefault(); event.returnValue = ''; } };
     window.addEventListener('beforeunload', warn); return () => window.removeEventListener('beforeunload', warn);
