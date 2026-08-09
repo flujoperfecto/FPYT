@@ -1,10 +1,48 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { RESOURCE_LABELS, api, copyText, formatTime, youtubeId } from './api.js';
+import { RESOURCE_LABELS, TUTORIAL_CHANGE_FIELDS, api, copyText, describeTutorialChanges, formatTime, tutorialPublicPath, youtubeId } from './api.js';
 import TurnstileSlot, { useTurnstile } from './Turnstile.jsx';
 import Mark from './BrandMark.jsx';
 import usePageMeta from './usePageMeta.js';
 
-const editableFields = ['title', 'status', 'youtubeUrl', 'accessMode', 'description', 'slug', 'coverUrl'];
+// Cambios que un suscriptor nota de inmediato: se revisan con más detalle.
+const criticalFields = ['slug', 'status', 'accessMode', 'youtubeUrl'];
+const editableFields = TUTORIAL_CHANGE_FIELDS.map(item => item.field);
+
+function audienceLabel(subscribers = 0) {
+  return subscribers === 1 ? '1 suscriptor' : `${subscribers} suscriptores`;
+}
+
+function changeValueLabel(field, value) {
+  if (field === 'status') return value === 'published' ? 'Publicado' : 'Borrador';
+  if (field === 'accessMode') return value === 'public' ? 'Público, sin email' : 'Solicita email';
+  if (!value) return 'sin definir';
+  if (field === 'slug') return `«${value}»`;
+  if (field === 'coverUrl') return value.startsWith('/images/') ? 'imagen predeterminada' : value.split('/').pop().split('?')[0];
+  return value.length > 64 ? `${value.slice(0, 61)}…` : value;
+}
+
+function changeImpact(change, { subscribers = 0, replacesManagedCover = false }) {
+  const audience = audienceLabel(subscribers);
+  if (change.field === 'title') return 'El título nuevo reemplaza al anterior en la biblioteca, en el aula y en la pestaña del navegador.';
+  if (change.field === 'slug') return `El enlace público cambia de dirección. La anterior seguirá funcionando: quien la abra será redirigido automáticamente${subscribers ? `, incluidos los ${audience} que ya la recibieron` : ''}.`;
+  if (change.field === 'status') {
+    return change.to === 'published'
+      ? 'El tutorial aparecerá en la biblioteca pública y su enlace quedará abierto.'
+      : `Desaparecerá de la biblioteca y ${audience} dejarán de abrir el aula hasta que vuelvas a publicarlo.`;
+  }
+  if (change.field === 'accessMode') {
+    return change.to === 'public'
+      ? 'Cualquiera abrirá los materiales sin dejar su correo: dejarás de capturar suscriptores nuevos en este tutorial.'
+      : `El enlace directo al aula pedirá correo antes de mostrar los materiales. Los ${audience} con acceso concedido lo conservan.`;
+  }
+  if (change.field === 'youtubeUrl') return 'Cambia el video del aula. Los momentos conservan sus segundos de inicio y pueden quedar desalineados con el video nuevo: revísalos antes de publicar.';
+  if (change.field === 'coverUrl') {
+    return replacesManagedCover
+      ? 'La portada nueva sustituye a la imagen que subiste, y esa imagen se eliminará de Storage.'
+      : 'Cambia la imagen en la biblioteca y en la portada de la página de acceso.';
+  }
+  return 'Cambia el resumen visible en la biblioteca y en la página de acceso.';
+}
 
 function Login({ onSuccess, initialError = '' }) {
   const [email, setEmail] = useState('');
@@ -44,6 +82,71 @@ function ResourceForm({ videoId, chapterId, onCreated }) {
     <label>Descripción opcional<input name="description" placeholder="Qué es y cuándo usarlo" /></label>
     {error && <div className="form-error" role="alert">{error}</div>}<button className="small-primary" disabled={saving}>{saving ? 'Agregando…' : 'Agregar recurso +'}</button>
   </form>;
+}
+
+function ChangeReviewDialog({ changes, context, onConfirm, onCancel }) {
+  const dialogRef = useRef(null);
+  const confirmRef = useRef(null);
+
+  useEffect(() => {
+    const previousFocus = document.activeElement;
+    const focusFrame = window.requestAnimationFrame(() => confirmRef.current?.focus());
+    const onKey = event => {
+      if (event.key === 'Escape') { onCancel(); return; }
+      if (event.key !== 'Tab' || !dialogRef.current) return;
+      const focusable = [...dialogRef.current.querySelectorAll('button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')];
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      window.removeEventListener('keydown', onKey);
+      if (previousFocus instanceof HTMLElement) previousFocus.focus();
+    };
+  }, [onCancel]);
+
+  const critical = changes.filter(change => criticalFields.includes(change.field)).length;
+  return <div className="review-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onCancel(); }}>
+    <div className="review-dialog" role="dialog" aria-modal="true" aria-labelledby="review-title" ref={dialogRef}>
+      <header>
+        <span>REVISIÓN DE CAMBIOS</span>
+        <h2 id="review-title">Esto cambiará para <em>quien te lea.</em></h2>
+        <p>{changes.length === 1 ? '1 cambio' : `${changes.length} cambios`}{critical ? ` · ${critical === 1 ? '1 afecta el acceso' : `${critical} afectan el acceso`}` : ''} · {audienceLabel(context.subscribers)} en este tutorial.</p>
+      </header>
+      <ul className="review-list">
+        {changes.map(change => <li key={change.field} className={criticalFields.includes(change.field) ? 'critical' : ''}>
+          <div className="review-field"><strong>{change.label}</strong>{criticalFields.includes(change.field) && <b>IMPACTO ALTO</b>}</div>
+          <div className="review-values"><span>{changeValueLabel(change.field, change.from)}</span><i aria-hidden="true">→</i><span className="review-next">{changeValueLabel(change.field, change.to)}</span></div>
+          <p>{changeImpact(change, context)}</p>
+        </li>)}
+      </ul>
+      <footer>
+        <button type="button" className="text-button" onClick={onCancel}>Seguir editando</button>
+        <button type="button" className="small-primary" ref={confirmRef} onClick={onConfirm}>Aplicar en el sitio</button>
+      </footer>
+    </div>
+  </div>;
+}
+
+function PublicLinkPanel({ selected, draft }) {
+  const [copied, setCopied] = useState(false);
+  const origin = window.location.origin;
+  const currentPath = tutorialPublicPath(selected);
+  const nextPath = tutorialPublicPath(draft);
+  const copy = async () => { await copyText(`${origin}${currentPath}`); setCopied(true); window.setTimeout(() => setCopied(false), 1600); };
+  return <aside className="public-link">
+    <div className="public-link-main"><span>ENTRADA AL AULA ACTUAL</span><strong>{origin}{currentPath}</strong></div>
+    <div className="public-link-actions">
+      <button type="button" onClick={copy}>{copied ? 'Copiado ✓' : 'Copiar enlace'}</button>
+      <a href={currentPath} target="_blank" rel="noreferrer">Abrir ↗</a>
+    </div>
+    {currentPath !== nextPath && <p className="public-link-next">Al guardar pasará a <b>{origin}{nextPath}</b>. La dirección anterior seguirá redirigiendo automáticamente.</p>}
+    {selected.status !== 'published' && <p className="public-link-warning">Este tutorial está en borrador: el enlace responde “no encontrado” a cualquier visitante.</p>}
+  </aside>;
 }
 
 function moveIds(items, index, direction) {
@@ -86,10 +189,12 @@ function VideoForm({ selected, draft, dirty, busy, setField, onSubmit, onDiscard
   return <form className="video-form" onSubmit={onSubmit}>
     <div className="field-row"><label>Título<input required value={draft.title} onChange={event => setField('title', event.target.value)} /></label><label>Estado<select value={draft.status} onChange={event => setField('status', event.target.value)}><option value="draft">Borrador</option><option value="published">Publicado</option></select></label></div>
     <label>URL de YouTube<input type="url" value={draft.youtubeUrl} onChange={event => setField('youtubeUrl', event.target.value)} placeholder="https://youtube.com/watch?v=…" /></label>
+    {draft.youtubeUrl && !videoId && <p className="field-warning" role="alert">No reconocemos un video de YouTube en esta URL. Usa un enlace de youtube.com/watch, youtu.be, /embed o /shorts: de lo contrario el aula no puede reproducir nada.</p>}
     {videoId && <aside className="youtube-verification"><img src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`} alt="Miniatura obtenida de YouTube" /><div><span>VERIFICACIÓN DE CONTENIDO</span><strong>¿La miniatura coincide con este tutorial?</strong><p>Comprueba título, portada y capítulos antes de publicar. Una URL incorrecta rompe la continuidad de la experiencia.</p><a href={draft.youtubeUrl} target="_blank" rel="noreferrer">Abrir video en YouTube ↗</a></div></aside>}
     <div className={`access-setting ${draft.accessMode === 'public' ? 'is-public' : ''}`}><label>Acceso al material<select value={draft.accessMode || 'email'} onChange={event => setField('accessMode', event.target.value)}><option value="email">Solicita email</option><option value="public">Público, sin email</option></select></label><div><strong>{draft.accessMode === 'public' ? 'Acceso directo activado' : 'Captura de email activada'}</strong><span>{draft.accessMode === 'public' ? 'El enlace llevará directamente al hub y sus materiales.' : 'El suscriptor deberá ingresar su correo antes de abrir el hub.'}</span></div></div>
     <label>Descripción<textarea rows="3" value={draft.description} onChange={event => setField('description', event.target.value)} /></label>
     <div className="field-row"><label>URL pública<input required value={draft.slug} onChange={event => setField('slug', event.target.value)} /></label><label>URL externa de portada<input value={draft.coverUrl} onChange={event => setField('coverUrl', event.target.value)} /></label></div>
+    <PublicLinkPanel selected={selected} draft={draft} />
     <div className="cover-manager"><img src={draft.coverUrl || '/images/flujo-classroom.webp'} alt="Vista previa de la portada" /><div><strong>Portada del tutorial</strong><span>WebP, JPG, PNG o AVIF · máximo 8 MB</span><label className="cover-upload">{busy === 'cover' ? 'Procesando…' : 'Subir imagen'}<input type="file" accept="image/jpeg,image/png,image/webp,image/avif" onChange={onUploadCover} disabled={Boolean(busy)} /></label>{selected.coverStoragePath && <button type="button" onClick={onRemoveCover} disabled={Boolean(busy)}>Restablecer</button>}</div></div>
     <div className={dirty ? 'form-actions is-dirty' : 'form-actions'}><button className="small-primary" disabled={!dirty || Boolean(busy)}>{busy === 'save-video' ? 'Guardando…' : dirty ? 'Guardar tutorial' : 'Todo guardado ✓'}</button>{dirty && <button type="button" className="text-button" onClick={onDiscard}>Descartar cambios</button>}</div>
   </form>;
@@ -129,12 +234,16 @@ export default function AdminPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [accessFilter, setAccessFilter] = useState('all');
   const savedRef = useRef(null);
-
-  useEffect(() => { document.title = 'Panel editorial — Flujo Perfecto'; }, []);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   const selected = useMemo(() => videos.find(video => video.id === selectedId), [videos, selectedId]);
   const chapter = selected?.chapters.find(item => item.id === chapterId);
-  const dirty = useMemo(() => Boolean(selected && draft && editableFields.some(field => String(selected[field] ?? '') !== String(draft[field] ?? ''))), [draft, selected]);
+  const pendingChanges = useMemo(() => describeTutorialChanges(selected, draft), [draft, selected]);
+  const dirty = pendingChanges.length > 0;
+  const reviewContext = {
+    subscribers: selected?.subscribers || 0,
+    replacesManagedCover: Boolean(selected?.coverStoragePath) && selected?.coverUrl !== draft?.coverUrl,
+  };
   const filteredVideos = useMemo(() => {
     const term = query.trim().toLocaleLowerCase('es');
     return videos.filter(video => (!term || `${video.title} ${video.slug}`.toLocaleLowerCase('es').includes(term))
@@ -184,7 +293,14 @@ export default function AdminPage() {
   };
   const act = async (key, action, success) => {
     setBusy(key); setNotice(null);
-    try { const result = await action(); if (success) setNotice({ type: result?.warning ? 'warning' : 'success', text: result?.warning || success }); return result; }
+    try {
+      const result = await action();
+      if (success) {
+        const resolved = typeof success === 'function' ? success(result) : { text: success };
+        setNotice({ type: result?.warning ? 'warning' : 'success', text: result?.warning || resolved.text, details: resolved.details || [] });
+      }
+      return result;
+    }
     catch (errorValue) { setNotice({ type: 'error', text: errorValue.message }); return null; }
     finally { setBusy(''); }
   };
@@ -197,11 +313,27 @@ export default function AdminPage() {
     const video = await api('/api/admin/videos', { method: 'POST', body: { title: 'Nuevo tutorial' } });
     await refresh(video.id); return video;
   }, 'Tutorial creado como borrador.');
-  const saveVideo = async event => {
+  const reviewSave = event => {
     event.preventDefault();
-    const visibilityChanged = selected.status !== draft.status || selected.accessMode !== draft.accessMode;
-    if (visibilityChanged && !window.confirm(`Vas a guardar este tutorial como ${draft.status === 'published' ? 'publicado' : 'borrador'} y con acceso ${draft.accessMode === 'public' ? 'público' : 'mediante email'}. ¿Continuar?`)) return;
-    await act('save-video', async () => { const saved = await api(`/api/admin/videos/${draft.id}`, { method: 'PUT', body: draft }); await refresh(saved.id); return saved; }, 'Cambios guardados ✓');
+    if (!pendingChanges.length) return;
+    setNotice(null); setReviewOpen(true);
+  };
+  const saveVideo = async () => {
+    setReviewOpen(false);
+    await act('save-video', async () => {
+      const saved = await api(`/api/admin/videos/${draft.id}`, { method: 'PUT', body: draft });
+      // El servidor puede normalizar el slug. Marcar esta versión como la base
+      // guardada evita reinyectar el valor crudo al fusionar el catálogo nuevo.
+      savedRef.current = saved;
+      setDraft({ ...saved });
+      await refresh(saved.id);
+      return saved;
+    }, result => {
+      const details = (result?.changes || []).map(change => `${change.label}: ${changeValueLabel(change.field, change.from)} → ${changeValueLabel(change.field, change.to)}`);
+      if (result?.normalizedSlug) details.push(`La URL se normalizó a «${result.normalizedSlug.applied}» para mantener el formato del sitio.`);
+      if (result?.changes?.some(change => change.field === 'slug')) details.push('La dirección anterior redirige automáticamente a la nueva.');
+      return { text: 'Cambios aplicados en el sitio público ✓', details };
+    });
   };
   const duplicateVideo = () => act('duplicate-video', async () => {
     const copy = await api(`/api/admin/videos/${selected.id}/duplicate`, { method: 'POST' }); await refresh(copy.id); return copy;
@@ -272,14 +404,14 @@ export default function AdminPage() {
         />
         {draft ? <div className="editor">
           <VideoEditorHeader selected={selected} dirty={dirty} busy={busy} onDuplicate={duplicateVideo} onDelete={deleteVideo} />
-          {notice && <div className={`admin-message ${notice.type}`} role="status" aria-live="polite">{notice.text}</div>}
+          {notice && <div className={`admin-message ${notice.type}`} role="status" aria-live="polite"><span>{notice.text}</span>{notice.details?.length > 0 && <ul>{notice.details.map(detail => <li key={detail}>{detail}</li>)}</ul>}</div>}
           <VideoForm
             selected={selected}
             draft={draft}
             dirty={dirty}
             busy={busy}
             setField={setField}
-            onSubmit={saveVideo}
+            onSubmit={reviewSave}
             onDiscard={() => setDraft({ ...selected })}
             onUploadCover={uploadCover}
             onRemoveCover={removeCover}
@@ -307,5 +439,6 @@ export default function AdminPage() {
       </section>
       <LeadsPanel overview={overview} busy={busy} onRemoveLead={removeLead} />
     </div>
+    {reviewOpen && draft && <ChangeReviewDialog changes={pendingChanges} context={reviewContext} onConfirm={saveVideo} onCancel={() => setReviewOpen(false)} />}
   </main>;
 }

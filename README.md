@@ -10,6 +10,7 @@ Para retomar el desarrollo, decisiones de arquitectura, mapa completo de archivo
 - Los visitantes usan sesiones anónimas persistentes de Supabase Auth.
 - Los administradores ingresan con email y contraseña y deben pertenecer a `admin_users`.
 - RLS protege borradores, capítulos, recursos, suscriptores y accesos.
+- Cambiar el slug conserva los enlaces anteriores; cada alias queda reservado para su tutorial y se resuelve sin exponer el historial completo.
 - El bucket `tutorial-materials` es privado y las descargas usan URLs firmadas de cinco minutos.
 - El progreso se conserva en el navegador del suscriptor.
 - Turnstile protege el alta anónima y el login administrativo cuando Auth está configurado con una clave secreta real de Cloudflare.
@@ -19,7 +20,7 @@ Para retomar el desarrollo, decisiones de arquitectura, mapa completo de archivo
 
 La portada obtiene `GET /api/news` a través de `src/api.js`. Ese endpoint interno lee exclusivamente la última edición publicada gracias a RLS. El ticker puede pausarse, se detiene al recibir foco o puntero y, en móvil, se convierte en un carrusel manual con `scroll-snap`. Cada noticia abre un panel accesible con resumen, utilidad práctica y enlaces a todas sus fuentes.
 
-La Edge Function `refresh-ai-news` consulta una lista versionada de feeds oficiales y periodísticos, deduplica hasta 30 candidatos recientes y pide a `deepseek-v4-pro` cuatro noticias en español. Sólo después de validar completamente la respuesta llama a la RPC transaccional `publish_ai_news_edition`; ante cualquier fallo conserva la edición anterior.
+La Edge Function `refresh-ai-news` consulta una lista versionada de feeds oficiales y periodísticos, deduplica hasta 30 candidatos recientes y pide a `deepseek-v4-flash` cuatro noticias en español. Sólo después de validar completamente la respuesta llama a la RPC transaccional `publish_ai_news_edition`; ante cualquier fallo conserva la edición anterior.
 
 Los secretos `DEEPSEEK_API_KEY` y `AI_NEWS_CRON_SECRET` pertenecen únicamente a Supabase. No deben configurarse en Vercel ni utilizar el prefijo `VITE_`. La ejecución diaria está prevista a las `11:30 UTC` y debe activarse únicamente después de una ejecución manual verificada:
 
@@ -47,6 +48,7 @@ El build valida que existan `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`
 Rutas principales:
 
 - `/acceso/:slug`: captura de email para contenidos protegidos.
+- `/materiales/:slug`: materiales ordenados del video, sin reproductor.
 - `/hub/:slug`: aula interactiva con línea de tiempo y materiales.
 - `/admin`: gestión de tutoriales, momentos, recursos y suscriptores.
 
@@ -79,10 +81,16 @@ npm run supabase:bootstrap-admin
 
 ## Pruebas de seguridad
 
-`supabase/tests/hub_security_test.sql` contiene 97 comprobaciones de esquema, privilegios, RLS, Storage y Pulso IA. Puede ejecutarse contra el proyecto enlazado con Docker Desktop activo:
+`supabase/tests/hub_security_test.sql` contiene 133 comprobaciones de esquema, privilegios, RLS, Storage, historial de slugs y Pulso IA. Puede ejecutarse contra el proyecto enlazado con Docker Desktop activo:
 
 ```bash
 npx supabase test db --linked
+```
+
+Las utilidades de rutas, slugs, acceso estable y validación de YouTube tienen una suite rápida independiente:
+
+```bash
+npm run test:client-utils
 ```
 
 O con Docker Desktop activo y la pila local iniciada:

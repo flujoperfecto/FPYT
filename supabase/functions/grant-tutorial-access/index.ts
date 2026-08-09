@@ -2,6 +2,7 @@ import "@supabase/functions-js/edge-runtime.d.ts"
 import { withSupabase } from "@supabase/server"
 
 const emailPattern = /^\S+@\S+\.\S+$/
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const allowedOrigin = Deno.env.get("APP_ORIGIN") || "http://127.0.0.1:5173"
 
 export default {
@@ -24,6 +25,7 @@ export default {
     }
 
     const body = await req.json().catch(() => ({}))
+    const tutorialId = String(body.tutorialId || "").trim()
     const slug = String(body.slug || "").trim()
     const name = String(body.name || "").trim().slice(0, 160)
     const email = String(body.email || "").trim().toLowerCase().slice(0, 320)
@@ -31,7 +33,13 @@ export default {
     const website = String(body.website || "").trim()
 
     if (website) return new Response(null, { status: 204 })
-    if (!slug || !emailPattern.test(email)) {
+    if (!tutorialId && !slug) {
+      return Response.json({ error: "Tutorial no encontrado." }, { status: 404 })
+    }
+    if (tutorialId && !uuidPattern.test(tutorialId)) {
+      return Response.json({ error: "La referencia del tutorial no es válida." }, { status: 400 })
+    }
+    if (!emailPattern.test(email)) {
       return Response.json({ error: "Ingresa un correo válido." }, { status: 400 })
     }
     if (!consent) {
@@ -46,14 +54,33 @@ export default {
       return Response.json({ error: "Demasiados intentos. Prueba nuevamente más tarde." }, { status: 429 })
     }
 
-    const { data: tutorial, error: tutorialError } = await ctx.supabaseAdmin
+    let tutorialQuery = ctx.supabaseAdmin
       .from("tutorials")
       .select("id, slug, status, access_mode")
-      .eq("slug", slug)
       .eq("status", "published")
-      .maybeSingle()
+    tutorialQuery = tutorialId ? tutorialQuery.eq("id", tutorialId) : tutorialQuery.eq("slug", slug)
+    let { data: tutorial, error: tutorialError } = await tutorialQuery.maybeSingle()
 
     if (tutorialError) throw tutorialError
+    // Compatibilidad con formularios ya abiertos antes del despliegue: los
+    // clientes nuevos envían UUID, pero un cliente antiguo puede conservar el
+    // slug previo. El RPC exacto evita enumerar el historial.
+    if (!tutorial && !tutorialId && slug) {
+      const { data: moved, error: movedError } = await ctx.supabaseAdmin
+        .rpc("resolve_tutorial_slug", { p_slug: slug })
+        .maybeSingle()
+      if (movedError) throw movedError
+      if (moved) {
+        const currentResult = await ctx.supabaseAdmin
+          .from("tutorials")
+          .select("id, slug, status, access_mode")
+          .eq("slug", moved.slug)
+          .eq("status", "published")
+          .maybeSingle()
+        if (currentResult.error) throw currentResult.error
+        tutorial = currentResult.data
+      }
+    }
     if (!tutorial) {
       return Response.json({ error: "Tutorial no encontrado." }, { status: 404 })
     }

@@ -10,6 +10,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test:client-utils": "node scripts/test-tutorial-utils.mjs",
     "test:ai-news": "node --experimental-strip-types scripts/test-ai-news.mjs",
     "supabase:migrate-data": "node scripts/migrate-to-supabase.mjs",
     "supabase:bootstrap-admin": "node scripts/bootstrap-admin.mjs",

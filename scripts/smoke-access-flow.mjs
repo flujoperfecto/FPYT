@@ -37,7 +37,9 @@ try {
   assert(before.data.length === 0, 'RLS oculta capítulos antes de conceder acceso');
 
   const grant = await subscriber.functions.invoke('grant-tutorial-access', {
-    body: { slug, name: 'Smoke test', email: testEmail, consent: true, website: '' },
+    // Un slug deliberadamente obsoleto comprueba que el UUID cargado en la
+    // landing mantiene la identidad aunque la dirección cambie antes del envío.
+    body: { tutorialId, slug: `${slug}-obsoleto-smoke`, name: 'Smoke test', email: testEmail, consent: true, website: '' },
   });
   if (grant.error) throw grant.error;
   assert(grant.data?.redirect === `/hub/${slug}`, 'la Edge Function devuelve el hub correcto');

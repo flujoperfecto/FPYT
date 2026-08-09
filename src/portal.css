@@ -255,3 +255,59 @@ button:disabled { opacity: .45; cursor: not-allowed !important; }
   .material-stream:after,.stream-node>i:after,.material-modal { animation: none; }
   .material-card:hover { transform: none; }
 }
+
+/* Revisión de cambios del panel y respuestas del sitio ante un tutorial movido */
+.admin-message span { display: block; }
+.admin-message ul { margin: 8px 0 0; padding-left: 16px; display: grid; gap: 4px; color: #b6acbd; font-size: 9px; line-height: 1.5; }
+.field-warning { margin: -4px 0 0; padding: 9px 12px; border: 1px solid rgba(255,217,112,.3); background: rgba(255,217,112,.06); color: #ffd970; font-size: 9px; line-height: 1.5; }
+
+.public-link { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; padding: 13px 14px; border: 1px solid var(--line); background: #0a080e; }
+.public-link-main { min-width: 0; display: grid; gap: 5px; }
+.public-link-main span { color: var(--lilac); font-size: 8px; letter-spacing: .14em; }
+.public-link-main strong { overflow: hidden; color: #d6cdda; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.public-link-actions { display: flex; gap: 7px; }
+.public-link-actions button,.public-link-actions a { border: 1px solid #4c3b5d; padding: 8px 10px; background: #16101d; color: #c4b9ca; font-size: 8px; cursor: pointer; }
+.public-link-next,.public-link-warning { grid-column: 1/-1; margin: 0; overflow-wrap: anywhere; font-size: 9px; line-height: 1.5; }
+.public-link-next { color: var(--acid); }.public-link-next b { color: white; }
+.public-link-warning { color: #ffd970; }
+
+.review-backdrop { position: fixed; z-index: 60; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(5,3,9,.78); backdrop-filter: blur(6px); }
+.review-dialog { width: min(620px,100%); max-height: 86vh; display: flex; flex-direction: column; border: 1px solid #4c3b5d; background: #0d0912; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+.review-dialog header { padding: 22px 24px 18px; border-bottom: 1px solid var(--line); }
+.review-dialog header span { color: var(--lilac); font-size: 9px; letter-spacing: .18em; }
+.review-dialog h2 { margin: 9px 0 0; font-size: 27px; line-height: 1.05; letter-spacing: -.04em; }.review-dialog h2 em { color: var(--lilac); }
+.review-dialog header p { margin: 11px 0 0; color: #877d8d; font-size: 10px; }
+.review-list { flex: 1; overflow-y: auto; margin: 0; padding: 0; list-style: none; }
+.review-list li { padding: 15px 24px; border-bottom: 1px solid var(--line); display: grid; gap: 7px; }
+.review-list li.critical { border-left: 2px solid var(--violet); background: rgba(133,60,255,.05); }
+.review-field { display: flex; align-items: center; gap: 9px; }
+.review-field strong { font-size: 11px; }
+.review-field b { padding: 3px 6px; border: 1px solid rgba(133,60,255,.4); color: var(--lilac); font-size: 7px; letter-spacing: .1em; }
+.review-values { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: #7d7384; font-size: 10px; }
+.review-values i { color: var(--violet); font-style: normal; }
+.review-values .review-next { color: var(--acid); }
+.review-list p { margin: 0; color: #a99fac; font-size: 10px; line-height: 1.55; }
+.review-dialog footer { display: flex; justify-content: flex-end; align-items: center; gap: 12px; padding: 16px 24px; border-top: 1px solid var(--line); }
+
+.portal-notice { min-height: 100vh; padding: 7vw; display: grid; align-content: center; justify-items: start; background: radial-gradient(circle at 78% 30%,rgba(133,60,255,.18),transparent 30%),#08060d; }
+.portal-notice .brand { display: flex; align-items: center; gap: 12px; font-size: 16px; letter-spacing: -.04em; }
+.portal-notice section { display: grid; justify-items: start; }
+.portal-notice p { margin: 38px 0 12px; color: var(--lilac); font-size: 9px; letter-spacing: .18em; }
+.portal-notice h1 { max-width: 720px; margin: 0; font-size: clamp(40px,5.5vw,74px); line-height: .95; letter-spacing: -.05em; }.portal-notice h1 em { display: block; color: var(--lilac); }
+.portal-notice section>span { max-width: 540px; margin-top: 26px; color: #a99fac; line-height: 1.6; }
+.portal-notice small { max-width: 540px; margin-top: 12px; color: #756c7b; font-size: 11px; line-height: 1.5; }
+.portal-notice-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 30px; }
+.portal-notice-actions a { min-height: 52px; padding: 0 18px; display: inline-flex; align-items: center; background: var(--violet); color: white; font-size: 12px; font-weight: 800; box-shadow: 5px 5px #35106f; }
+.portal-notice-actions button { min-height: 52px; padding: 0 18px; border: 1px solid #4c3b5d; background: #16101d; color: #c4b9ca; font-size: 12px; cursor: pointer; }
+
+@media (max-width: 700px) {
+  .public-link { grid-template-columns: 1fr; }
+  .public-link-actions button,.public-link-actions a { min-height: 44px; display: inline-flex; align-items: center; font-size: 10px; }
+  .review-backdrop { padding: 0; place-items: end stretch; }
+  .review-dialog { width: 100%; max-height: 92vh; }
+  .review-dialog header,.review-list li,.review-dialog footer { padding-left: 18px; padding-right: 18px; }
+  .review-dialog h2 { font-size: 23px; }
+  .review-dialog footer button,.review-dialog footer .text-button { min-height: 44px; }
+  .portal-notice { padding: 28px 20px; }
+  .portal-notice-actions a,.portal-notice-actions button { flex: 1 1 100%; justify-content: center; }
+}

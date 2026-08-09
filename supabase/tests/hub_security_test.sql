@@ -7,7 +7,7 @@ set local role postgres;
 grant usage on schema extensions to public;
 grant execute on all functions in schema extensions to public;
 reset role;
-insert into tap_results(line) select extensions.plan(97);
+insert into tap_results(line) select extensions.plan(133);
 set local role postgres;
 
 insert into auth.users (id, email) values
@@ -68,6 +68,7 @@ insert into tap_results(line) select ok((select relrowsecurity from pg_class whe
 insert into tap_results(line) select ok((select relrowsecurity from pg_class where oid = 'public.access_attempts'::regclass), 'access_attempts has RLS');
 insert into tap_results(line) select ok((select relrowsecurity from pg_class where oid = 'public.ai_news_editions'::regclass), 'ai_news_editions has RLS');
 insert into tap_results(line) select ok((select relrowsecurity from pg_class where oid = 'public.ai_news_items'::regclass), 'ai_news_items has RLS');
+insert into tap_results(line) select ok((select relrowsecurity from pg_class where oid = 'public.tutorial_slug_history'::regclass), 'tutorial_slug_history has RLS');
 
 -- Explicit grants are intentionally narrower than the RLS policies.
 insert into tap_results(line) select ok(not has_table_privilege('anon', 'public.leads', 'SELECT'), 'anon cannot query leads');
@@ -76,6 +77,15 @@ insert into tap_results(line) select ok(not has_table_privilege('authenticated',
 insert into tap_results(line) select ok(has_table_privilege('anon', 'public.tutorials', 'SELECT'), 'anon can query tutorial metadata');
 insert into tap_results(line) select ok(has_table_privilege('authenticated', 'public.tutorial_access', 'SELECT'), 'authenticated can query own access');
 insert into tap_results(line) select ok(has_table_privilege('anon', 'public.tutorial_access', 'SELECT'), 'anon can evaluate gated-content policies');
+insert into tap_results(line) select ok(not has_table_privilege('anon', 'public.tutorial_slug_history', 'SELECT'), 'anon cannot enumerate historical tutorial slugs');
+insert into tap_results(line) select ok(has_table_privilege('authenticated', 'public.tutorial_slug_history', 'SELECT'), 'authenticated role can reach admin-only slug history reads');
+insert into tap_results(line) select ok(not has_table_privilege('authenticated', 'public.tutorial_slug_history', 'INSERT'), 'authenticated cannot write slug history directly');
+insert into tap_results(line) select ok(has_function_privilege('anon', 'public.resolve_tutorial_slug(text)', 'EXECUTE'), 'anon can resolve one known historical slug');
+insert into tap_results(line) select ok(has_function_privilege('authenticated', 'public.resolve_tutorial_slug(text)', 'EXECUTE'), 'authenticated can resolve one known historical slug');
+insert into tap_results(line) select ok(not has_function_privilege('anon', 'private.record_tutorial_slug_change()', 'EXECUTE'), 'anon cannot execute slug history trigger function');
+insert into tap_results(line) select ok(not has_function_privilege('authenticated', 'private.record_tutorial_slug_change()', 'EXECUTE'), 'authenticated cannot execute slug history trigger function');
+insert into tap_results(line) select ok((select prosecdef from pg_proc where oid = 'private.record_tutorial_slug_change()'::regprocedure), 'slug history trigger owns its private writes');
+insert into tap_results(line) select ok((select prosecdef from pg_proc where oid = 'public.resolve_tutorial_slug(text)'::regprocedure), 'exact public slug resolver is security definer');
 insert into tap_results(line) select ok(not has_function_privilege('anon', 'public.grant_tutorial_access(uuid,uuid,text,text,timestamptz)', 'EXECUTE'), 'anon cannot execute access RPC');
 insert into tap_results(line) select ok(not has_function_privilege('authenticated', 'public.grant_tutorial_access(uuid,uuid,text,text,timestamptz)', 'EXECUTE'), 'authenticated cannot execute access RPC');
 insert into tap_results(line) select ok(has_function_privilege('service_role', 'public.grant_tutorial_access(uuid,uuid,text,text,timestamptz)', 'EXECUTE'), 'service role can execute access RPC');
@@ -232,7 +242,95 @@ insert into tap_results(line) select is((select count(*)::integer from public.le
 insert into tap_results(line) select is((select count(*)::integer from public.admin_users), 1, 'admin sees own admin record');
 insert into tap_results(line) select lives_ok($$update public.tutorials set title = 'Tutorial privado editado' where id = '10000000-0000-0000-0000-000000000001'$$, 'admin can update tutorials');
 insert into tap_results(line) select is((select title from public.tutorials where id = '10000000-0000-0000-0000-000000000001'), 'Tutorial privado editado', 'admin update is persisted');
+insert into tap_results(line) select lives_ok(
+  $$update public.tutorials set slug = 'test-publico-v2' where id = '10000000-0000-0000-0000-000000000002'$$,
+  'admin can rename a published tutorial'
+);
+insert into tap_results(line) select is(
+  (select tutorial_id::text from public.tutorial_slug_history where slug = 'test-publico'),
+  '10000000-0000-0000-0000-000000000002',
+  'rename records the previous slug against the same tutorial'
+);
+insert into tap_results(line) select lives_ok(
+  $$update public.tutorials set slug = 'test-publico-v3' where id = '10000000-0000-0000-0000-000000000002'$$,
+  'admin can rename the same tutorial a second time'
+);
+insert into tap_results(line) select is(
+  (select array_agg(slug order by slug)::text from public.tutorial_slug_history where tutorial_id = '10000000-0000-0000-0000-000000000002'),
+  '{test-publico,test-publico-v2}',
+  'multiple historical slugs remain attached to one tutorial'
+);
+insert into tap_results(line) select lives_ok(
+  $$update public.tutorials set slug = 'test-borrador-v2' where id = '10000000-0000-0000-0000-000000000003'$$,
+  'admin can rename a draft without publishing its alias'
+);
+insert into tap_results(line) select is(
+  (select count(*)::integer from public.tutorial_slug_history),
+  3,
+  'admin can inspect published and draft slug history'
+);
+insert into tap_results(line) select throws_ok(
+  $$update public.tutorials set slug = 'test-publico' where id = '10000000-0000-0000-0000-000000000001'$$,
+  '23505',
+  'Tutorial slug "test-publico" is reserved by another tutorial',
+  'another tutorial cannot claim a reserved historical slug'
+);
+insert into tap_results(line) select is(
+  (select tutorial_id::text from public.tutorial_slug_history where slug = 'test-publico'),
+  '10000000-0000-0000-0000-000000000002',
+  'a rejected claim leaves the historical owner unchanged'
+);
+insert into tap_results(line) select throws_ok(
+  $$insert into public.tutorials (id, title, slug) values ('10000000-0000-0000-0000-000000000009', 'Reclamo inválido', 'test-publico')$$,
+  '23505',
+  'Tutorial slug "test-publico" is reserved by another tutorial',
+  'a new tutorial cannot claim a reserved historical slug'
+);
+insert into tap_results(line) select is(
+  (select count(*)::integer from public.tutorials where id = '10000000-0000-0000-0000-000000000009'),
+  0,
+  'a rejected insert leaves no tutorial behind'
+);
+insert into tap_results(line) select is(
+  (select tutorial_id::text from public.tutorial_slug_history where slug = 'test-publico'),
+  '10000000-0000-0000-0000-000000000002',
+  'a rejected insert leaves the historical owner unchanged'
+);
+insert into tap_results(line) select lives_ok(
+  $$update public.tutorials set slug = 'test-publico' where id = '10000000-0000-0000-0000-000000000002'$$,
+  'a tutorial can return to one of its own historical slugs'
+);
+insert into tap_results(line) select is(
+  (select count(*)::integer from public.tutorial_slug_history history_item join public.tutorials tutorial_item on tutorial_item.slug = history_item.slug),
+  0,
+  'no live tutorial slug remains in historical aliases'
+);
+insert into tap_results(line) select is(
+  (select array_agg(slug order by slug)::text from public.tutorial_slug_history where tutorial_id = '10000000-0000-0000-0000-000000000002'),
+  '{test-publico-v2,test-publico-v3}',
+  'rename-back replaces the live alias without creating a loop'
+);
+insert into tap_results(line) select lives_ok(
+  $$update public.tutorials set slug = 'test-privado-v2' where id = '10000000-0000-0000-0000-000000000001'$$,
+  'admin can rename a gated published tutorial'
+);
 insert into tap_results(line) select lives_ok($$insert into public.tutorials (title, slug) values ('Nuevo borrador', 'nuevo-borrador')$$, 'admin can create a draft');
+insert into tap_results(line) select is((select access_mode from public.tutorials where slug = 'nuevo-borrador'), 'public', 'new tutorials default to public materials');
+insert into tap_results(line) select lives_ok(
+  $$update public.tutorials set slug = 'nuevo-borrador-v2' where slug = 'nuevo-borrador'$$,
+  'renaming a temporary tutorial creates a cascade test alias'
+);
+insert into tap_results(line) select is(
+  (select count(*)::integer from public.tutorial_slug_history where slug = 'nuevo-borrador'),
+  1,
+  'temporary tutorial alias is recorded before deletion'
+);
+insert into tap_results(line) select lives_ok($$delete from public.tutorials where slug = 'nuevo-borrador-v2'$$, 'admin can delete the temporary tutorial');
+insert into tap_results(line) select is(
+  (select count(*)::integer from public.tutorial_slug_history where slug = 'nuevo-borrador'),
+  0,
+  'deleting a tutorial cascades through its historical slugs'
+);
 insert into tap_results(line) select lives_ok($$delete from public.leads where id = '40000000-0000-0000-0000-000000000001'$$, 'admin can revoke a subscriber lead');
 insert into tap_results(line) select lives_ok(
   $$select public.reorder_chapters('10000000-0000-0000-0000-000000000001', array['20000000-0000-0000-0000-000000000001']::uuid[])$$,
@@ -244,6 +342,42 @@ insert into tap_results(line) select lives_ok(
   'admin can reorder resources atomically'
 );
 insert into tap_results(line) select is((select position from public.resources where id = '30000000-0000-0000-0000-000000000001'), 0, 'resource reorder persists the requested position');
+reset role;
+
+set local role authenticated;
+set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
+insert into tap_results(line) select is(
+  (select count(*)::integer from public.tutorial_slug_history),
+  0,
+  'a non-admin subscriber cannot read historical slug rows'
+);
+reset role;
+
+-- Public resolution reveals only exact aliases whose current tutorial is published.
+set local role anon;
+insert into tap_results(line) select is(
+  (select slug || ':' || access_mode from public.resolve_tutorial_slug('test-publico-v2')),
+  'test-publico:public',
+  'an old public slug resolves directly to the current public route'
+);
+insert into tap_results(line) select is(
+  (select slug || ':' || access_mode from public.resolve_tutorial_slug('test-publico-v3')),
+  'test-publico:public',
+  'every alias in a rename chain resolves in one hop'
+);
+insert into tap_results(line) select is(
+  (select slug || ':' || access_mode from public.resolve_tutorial_slug('test-privado')),
+  'test-privado-v2:email',
+  'a gated tutorial alias preserves its current access mode'
+);
+insert into tap_results(line) select is_empty(
+  $$select * from public.resolve_tutorial_slug('test-borrador')$$,
+  'draft tutorial aliases are not publicly resolved'
+);
+insert into tap_results(line) select is_empty(
+  $$select * from public.resolve_tutorial_slug('slug-inexistente')$$,
+  'unknown slugs reveal no target'
+);
 reset role;
 
 set local role service_role;

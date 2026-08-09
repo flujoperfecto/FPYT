@@ -15,27 +15,28 @@ El progreso se marca manualmente por momento y se guarda sólo en el navegador d
 
 ## 2. Estado verificado
 
-Última verificación documentada: 4 de agosto de 2026.
+Última verificación documentada: 9 de agosto de 2026.
 
 - Proyecto Supabase: `FlujoPerfecto`.
 - Project ref: `bomqxagomdseekmdcsdh`.
-- Migraciones remotas aplicadas hasta `20260805031438_fix_ai_news_edition_complete_trigger.sql`. Las cuatro últimas incorporan Pulso IA, corrigen una ambigüedad interna del publicador, garantizan que un entorno nuevo no active el proceso de pago antes de validarlo, y corrigen un trigger compartido que fallaba en `DELETE` sobre `ai_news_items`.
+- Migraciones remotas aplicadas hasta `20260809044224_tutorial_slug_history.sql`. La última reserva cada slug anterior para su tutorial, mantiene redirecciones sin permitir reasignar enlaces y expone sólo una resolución exacta mediante RPC.
 - El Cron `refresh-ai-news-daily` (`30 11 * * *`, job id 2) está **activo** desde el 2026-08-05, tras verificar una publicación manual exitosa.
-- Edge Function `grant-tutorial-access` desplegada como versión 6 el 2026-08-04. El código remoto ya llama a `check_and_record_access_attempt`; la migración y la función están sincronizadas.
-- Edge Function `refresh-ai-news` desplegada como versión 8 el 2026-08-05, autenticada por una clave interna dedicada y conectada a Vault mediante `pg_net`. La URL, la clave de Cron y `DEEPSEEK_API_KEY` existen en Supabase.
+- Edge Function `grant-tutorial-access` desplegada como versión 7 el 2026-08-09. Recibe el UUID estable del tutorial para que un rename durante el formulario no cambie el contenido concedido; conserva fallback por slug e historial para clientes antiguos. JWT sigue siendo obligatorio.
+- Edge Function `refresh-ai-news` desplegada como versión 9 y activa, autenticada por una clave interna dedicada y conectada a Vault mediante `pg_net`. La URL, la clave de Cron y `DEEPSEEK_API_KEY` existen en Supabase.
   - Causa raíz de los fallos iniciales (v6): la llamada a DeepSeek forzaba `thinking: { type: "enabled" }` + `reasoning_effort: "high"` con `max_tokens: 4096`; el razonamiento agotaba el presupuesto de tokens antes de emitir el JSON final, produciendo timeout o contenido vacío. La v7 desactiva el modo thinking (`thinking: { type: "disabled" }`) para una tarea de curación/redacción que no lo necesita.
   - Bug adicional descubierto al diagnosticar (v8): el catch final sólo extraía `error.message` cuando `error instanceof Error`, colapsando cualquier otro valor lanzado a `"unknown_error"` y ocultando la causa real. Se añadió `describeError()` para serializar cualquier tipo de error lanzado.
   - Ese diagnóstico reveló un segundo bug real, en SQL: la función `private.ensure_ai_news_edition_complete()` (migración `20260805015357_ai_news_oracle.sql`) está compartida por los triggers de `ai_news_editions` y `ai_news_items`; en un `DELETE` sobre `ai_news_items` (el reemplazo idempotente que hace `publish_ai_news_edition` antes de insertar las 4 filas nuevas), `NEW` nunca está vinculado, y el código leía `new.edition_id` igualmente, lanzando `record "new" has no field "edition_id"`. Corregido en la migración `20260805031438_fix_ai_news_edition_complete_trigger.sql` (branching explícito por `TG_OP`/`TG_TABLE_NAME`, sin tocar `NEW` en `DELETE`).
   - Verificado el 2026-08-05: `npm run supabase:run-news-now` publicó una edición completa (4 ítems, 49 candidatos, 12 fuentes activas, modelo `deepseek-v4-pro`); se confirmó por SQL directo que la edición tiene 4 posiciones válidas con URLs `https://`.
   - Optimización de costo (2026-08-05): `DEEPSEEK_MODEL` pasó de `deepseek-v4-pro` a `deepseek-v4-flash`. Con thinking ya desactivado, esta tarea es clasificación/extracción estructurada sobre una lista corta pre-filtrada — el caso de uso recomendado para el nivel Flash. Precio por 1M tokens (cache-miss): Pro $0.435 input / $0.87 output vs Flash $0.14 input / $0.28 output (~3x más barato). Con ~16 candidatos en el prompt, el costo estimado por ejecución diaria baja de ~$0.0026 a ~$0.0009; a esta escala el gasto ya era marginal, pero Flash es la elección correcta para esta tarea de todas formas. Reescala a Pro sólo si la curación editorial empeora de forma perceptible.
-- Datos reales después de limpiar fixtures: 1 tutorial, 4 capítulos, 4 recursos y 1 lead.
-- Suite pgTAP: 97/97 pruebas aprobadas al ejecutar el SQL directamente contra el proyecto enlazado. `supabase test db --linked` requiere que Docker Desktop esté activo y no estuvo disponible en la última verificación.
+- Datos reales después de limpiar fixtures: 1 tutorial, 1 capítulo, 1 recurso y 0 leads. Conteos verificados por SQL tras el pgTAP transaccional; no se dejaron fixtures.
+- Suite pgTAP: 133/133 pruebas aprobadas contra el proyecto enlazado, antes y después de aplicar la migración. Incluye RLS, grants, historial de slugs, colisiones en INSERT/UPDATE, rename-back, cascada y resolución pública exacta.
+- Pruebas unitarias de utilidades del cliente: 14/14 aprobadas (slugs, rutas, payload estable de acceso y allowlist de YouTube).
 - Pruebas unitarias de Pulso IA: 9/9 aprobadas (RSS, Atom, límites, timeout, deduplicación, shortlist diverso y validación de DeepSeek).
-- Build Vite aprobado y `npm audit --omit=dev` sin vulnerabilidades.
+- Build Vite aprobado (74 módulos) y `npm audit --omit=dev` sin vulnerabilidades.
 - Lighthouse móvil sobre el build de producción: rendimiento 91, accesibilidad 96 y CLS 0 (2026-08-04).
-- Mejora UX local verificada el 2026-08-06: la portada prioriza la ruta disponible antes de Pulso IA; el acceso explica requisitos y ofrece un salto directo al formulario; el aula reanuda el primer momento incompleto, sincroniza la línea de tiempo mediante YouTube IFrame API, conserva un fallback `youtube-nocookie`, muestra señales contextuales de recursos y celebra el 100%; el panel incorpora verificación visual de la URL de YouTube y una barra persistente para cambios sin guardar. Esta mejora todavía debe desplegarse antes de considerarla parte del estado remoto.
+- Mejora UX verificada: la portada prioriza la ruta disponible antes de Pulso IA; el acceso explica requisitos; el aula reanuda y sincroniza la línea de tiempo; el panel verifica YouTube, preserva borradores al refrescar y muestra una revisión de cambios antes de guardar.
 - Repositorio desplegado en Vercel desde `main` con dominio canónico `https://www.flujoperfecto.com`, Node.js 22, `vercel.json`, fallback SPA, cabeceras seguras y `.vercelignore`.
-- `APP_ORIGIN` de la Edge Function está configurado en Supabase como `https://www.flujoperfecto.com`; el preflight remoto se verificó con respuesta 204 y el origen correcto el 2026-08-04.
+- `APP_ORIGIN` de la Edge Function está configurado en Supabase como `https://www.flujoperfecto.com`; el preflight remoto de la versión 7 se verificó con respuesta 204 y el origen correcto el 2026-08-09.
 - Cloudflare Turnstile tiene un widget de producción llamado `Flujo Perfecto Producción`, restringido a `www.flujoperfecto.com` y en modo Managed. La Site Key real está en Vercel y la Secret Key real sólo en Supabase Auth; ambas se configuraron el 2026-08-04 y nunca deben copiarse al repositorio.
 - Supabase Auth usa `site_url = "https://www.flujoperfecto.com"`, conserva redirects locales para desarrollo y tiene CAPTCHA Turnstile activo desde `supabase/config.toml`. La configuración remota se aplicó con `supabase config push` y la variable privada `SUPABASE_AUTH_CAPTCHA_SECRET` sólo existió en memoria durante el comando.
 
@@ -83,6 +84,7 @@ Supabase Cron + Vault
 ### Acceso de suscriptores
 
 - `/acceso/:slug`: landing para tutoriales con `access_mode = 'email'`.
+- `/materiales/:slug`: materiales ordenados del video, sin reproductor; es el enlace previsto para la descripción de YouTube.
 - `/hub/:slug`: aula interactiva del tutorial.
 - `/hub/:slug?preview=1`: vista previa privada; requiere una sesión de administrador y permite revisar borradores.
 
@@ -92,7 +94,7 @@ Flujo protegido:
 2. Turnstile entrega un token.
 3. Si no existe sesión, el cliente inicia una sesión anónima de Supabase Auth.
 4. La Edge Function valida email, consentimiento, honeypot y límite de intentos.
-5. La función llama a `grant_tutorial_access` usando el cliente administrativo.
+5. La función resuelve el UUID estable y llama a `grant_tutorial_access` usando el cliente administrativo.
 6. Se crean o actualizan `leads` y `tutorial_access` de forma atómica.
 7. RLS permite leer capítulos, recursos y archivos de ese tutorial.
 
@@ -117,6 +119,7 @@ Tablas públicas:
 - `leads`: email normalizado, nombre, consentimiento y tutorial.
 - `tutorial_access`: relación entre usuario autenticado, tutorial y lead.
 - `access_attempts`: registro temporal para limitar concesiones de acceso.
+- `tutorial_slug_history`: slugs anteriores reservados por tutorial. Los clientes no pueden enumerarlos ni escribirlos; el trigger privado mantiene la tabla.
 - `ai_news_editions`: edición diaria, modelo, cantidad de candidatos, publicación y metadatos de generación.
 - `ai_news_items`: cuatro noticias ordenadas con resumen, utilidad, fuente principal y fuentes adicionales.
 
@@ -152,6 +155,7 @@ Al eliminar contenido, limpia también sus objetos de Storage. `src/api.js` ya i
 - Los RPCs `reorder_chapters` y `reorder_resources` son `SECURITY INVOKER`, exigen administrador y validan que se suministre cada hijo exactamente una vez.
 - Las claves `SUPABASE_SECRET_KEY`, contraseñas administrativas y secretos de Turnstile nunca llevan prefijo `VITE_` ni se guardan en el repositorio.
 - La Edge Function acepta únicamente `APP_ORIGIN` como origen CORS.
+- Un slug histórico nunca puede asignarse a otro tutorial. `resolve_tutorial_slug(text)` es un `SECURITY DEFINER` público deliberado que sólo resuelve un alias exacto publicado; `anon` no tiene `SELECT` sobre la tabla. Los avisos del advisor sobre esta función son esperados y no deben resolverse abriendo la tabla.
 - `refresh-ai-news` no confía en JWT públicos: exige `x-cron-secret`, compara la clave en tiempo constante y sólo escribe mediante `service_role` después de validar la edición completa.
 - `publish_ai_news_edition` es `SECURITY INVOKER`, sólo puede ejecutarla `service_role`, exige exactamente cuatro posiciones válidas y reemplaza una fecha de forma atómica e idempotente.
 - `anon` y `authenticated` sólo pueden leer ediciones publicadas; ningún cliente puede escribir noticias.
@@ -165,6 +169,7 @@ Toda modificación de esquema debe hacerse con una migración nueva generada por
 src/
   App.jsx             Landing, biblioteca, aula demostrativa y método.
   AccessPage.jsx      Captura de email y concesión de acceso.
+  MaterialsPage.jsx   Materiales del video sin reproductor, con modales accesibles.
   HubPage.jsx         Aula real, materiales y progreso local. Reanuda el primer
                       momento incompleto y sincroniza el momento activo con
                       YouTube IFrame API sin recrear el reproductor al avanzar.
@@ -176,6 +181,7 @@ src/
                       centralizados en AdminPage, los subcomponentes son de presentación.
   Router.jsx          Enrutamiento por pathname, carga diferida de rutas privadas
                       y experiencia 404 con identidad propia.
+  PortalNotice.jsx    Experiencia compartida para errores y rutas retiradas.
   api.js              Capa de acceso a Supabase y operaciones de dominio.
                       Implementa también GET /api/news para la última edición pública.
                       También exporta RESOURCE_LABELS (mapa de tipo de recurso a
@@ -186,9 +192,9 @@ src/
   Turnstile.jsx       Carga y ejecución explícita de Turnstile.
   BrandMark.jsx       Única fuente del logo visible.
   data.js             Contenido local de demostración de la landing.
+  tutorialUtils.js    Slugs, rutas públicas, validación de YouTube y diff editorial.
   usePageMeta.js      Hook que actualiza título, meta description, canonical,
-                      Open Graph/Twitter y robots por ruta (App.jsx, AccessPage.jsx,
-                      HubPage.jsx, AdminPage.jsx). Mejora la corrección para
+                      Open Graph/Twitter y robots por ruta. Mejora la corrección para
                       navegadores reales y rastreadores que ejecutan JavaScript
                       (Googlebot); NO resuelve la visibilidad para rastreadores de
                       IA sin JS (GPTBot, ClaudeBot, PerplexityBot) — eso requiere
@@ -226,6 +232,7 @@ scripts/
   smoke-access-flow.mjs
   smoke-admin-flow.mjs
   smoke-ai-news.mjs
+  test-tutorial-utils.mjs
   test-ai-news.mjs
 
 vercel.json         Build Vite, salida dist, cabeceras y rewrite SPA.
@@ -341,14 +348,14 @@ Los smoke tests crean fixtures aislados y deben limpiarlos incluso si fallan. Co
 - El router manual necesita fallback SPA. En Vercel ya está resuelto mediante `vercel.json`; cualquier otro hosting debe aplicar una regla equivalente hacia `index.html`.
 - Los previews dinámicos de Vercel no pueden completar de forma segura los flujos protegidos con la configuración de producción: la Edge Function usa un único `APP_ORIGIN` exacto y Turnstile restringe hostnames. Para QA completo usa un origen estable y servicios de staging separados.
 - Antes de publicar, verifica políticas de privacidad, consentimiento y mecanismo de baja para comunicaciones.
-- La Edge Function `grant-tutorial-access` quedó desplegada como versión 6 el 2026-08-04 después de aplicar `20260804200000_atomic_access_attempts.sql`. En cambios futuros recuerda que `db push` sólo sincroniza SQL y que el código TypeScript requiere `npx supabase functions deploy grant-tutorial-access` por separado.
+- La Edge Function `grant-tutorial-access` quedó desplegada como versión 7 el 2026-08-09 después de aplicar `20260809044224_tutorial_slug_history.sql`. En cambios futuros recuerda que `db push` sólo sincroniza SQL y que el código TypeScript requiere desplegar la función por separado.
 - El directorio `server/` se eliminó el 2026-08-04: estaba vacío y podía sugerir a un futuro agente que existe un backend Node propio, contradiciendo la arquitectura descrita en §3. Si en algún momento se necesita un proceso Node server-side, créalo de nuevo con contenido real, no como placeholder.
 - Las versiones de `react`, `react-dom`, `vite` y `@vitejs/plugin-react` en `package.json` se fijaron a las versiones instaladas (antes usaban `"latest"`) el 2026-08-04, para que `npm install` sea reproducible entre máquinas y no arrastre un mayor sin aviso. Súbelas deliberadamente cuando quieras actualizar, revisando notas de cambios.
 - Pulso IA conserva la última edición cuando una fuente o DeepSeek falla. `supabase:run-news-now` ya publicó cuatro filas válidas el 2026-08-05 (verificado por SQL directo, equivalente a `supabase:smoke-news`). El Cron `refresh-ai-news-daily` está **activo** desde el 2026-08-05.
 - La lista versionada de feeds conserva únicamente endpoints estables verificados. Anthropic y Meta figuran como pendientes en el código porque no publican actualmente un RSS/Atom oficial estable; no los sustituyas por agregadores de terceros sin una decisión editorial explícita.
 - El panel muestra la miniatura real de YouTube junto a cada URL para detectar desalineaciones editoriales antes de publicar. La verificación es deliberadamente visual: no cambies automáticamente títulos, capítulos ni URLs remotas basándote sólo en metadatos de YouTube.
 - **Auditoría SEO/GEO (2026-08-05).** Hallazgo central: el sitio es una SPA 100% client-side sin prerenderizado — el HTML inicial no contiene texto, sólo `<title>`. Cualquier rastreador que no ejecute JavaScript (GPTBot, ClaudeBot, PerplexityBot, y cualquier indexador de primera pasada) ve una página en blanco. `site:flujoperfecto.com` devolvía 0 resultados en Google el día de la auditoría (el sitio llevaba 1 día desplegado, así que parte de eso es esperable, pero sin sitemap ni robots.txt tampoco había señal de descubrimiento).
-  - Corregido en esta sesión: `public/robots.txt`, `public/sitemap.xml` (sólo `/` por ahora — ver nota en el propio archivo), `public/llms.txt`, JSON-LD Organization+WebSite y Open Graph/Twitter completos en `index.html`, y `src/usePageMeta.js` (título/descripción/canonical/robots por ruta, con `noindex` en `/admin` y en `?preview=1`).
+  - Corregido: `public/robots.txt`, `public/sitemap.xml` (sólo `/` por ahora), `public/llms.txt`, JSON-LD Organization+WebSite, Open Graph/Twitter y `src/usePageMeta.js`. `/admin`, previews, 404 y contenido publicado vacío usan `noindex`.
   - **No corregido — requiere decisión o trabajo mayor:**
     1. Prerenderizado o SSR real. Es la dependencia de todo lo demás para GEO; `usePageMeta.js` sólo ayuda a navegadores reales y rastreadores que sí ejecutan JS.
     2. El único tutorial publicado (`idea-a-app-con-ia`) tiene `access_mode = 'email'`, así que ni siquiera con el renderizado resuelto habría contenido de tutorial públicamente indexable — RLS bloquea capítulos/recursos sin sesión con acceso concedido. Decisión de producto pendiente: reservar 1-2 tutoriales ancla como `public` para atraer tráfico orgánico.
@@ -356,4 +363,4 @@ Los smoke tests crean fixtures aislados y deben limpiarlos incluso si fallan. Co
     4. No se añadió un `<link rel="canonical">` estático en `index.html` a propósito: como el fallback SPA sirve el mismo HTML para cualquier ruta, un canonical fijo apuntando a `/` declararía incorrectamente que todas las rutas son duplicados de la home. `usePageMeta.js` ya lo corrige dinámicamente por ruta; no reintroduzcas uno estático sin resolver esto primero.
   - Auditoría completa (keywords, on-page, técnico, competencia, plan priorizado) publicada como artefacto durante la sesión; pide el enlace si se necesita retomarla.
   - **Trabajo de contenido pendiente, bloqueado deliberadamente**: construir el clúster de páginas sobre Claude Code, Claude Cowork y ChatGPT Codex (pilar + comparativas + glosario, detallado en la auditoría) espera a que existan los videos correspondientes en YouTube. No generes estas páginas de forma especulativa sin un video real que acompañar — cada tutorial del hub nace de un video publicado, no al revés. Retómalo cuando el usuario confirme que ya hay video(s) de ChatGPT y/o Claude disponibles en el canal.
-  - Actualización al fusionar esta rama (2026-08-08): el punto 2 se movió. Los tutoriales nuevos nacen con `access_mode = 'public'` y existe `/materiales/:slug`, una vista sin reproductor pensada para el tráfico que llega desde la descripción de YouTube. Es la ruta con más potencial de indexación del sitio, así que cuando se aborde el prerenderizado empieza por ahí.
+  - Actualización 2026-08-08: los tutoriales nuevos nacen con `access_mode = 'public'` y existe `/materiales/:slug`, una vista sin reproductor pensada para el tráfico que llega desde la descripción de YouTube. Es la ruta con más potencial de indexación del sitio, así que cuando se aborde el prerenderizado empieza por ahí.
