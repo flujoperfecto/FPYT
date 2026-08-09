@@ -1,7 +1,7 @@
 import { requireSupabase } from './supabase.js';
-import { describeTutorialChanges, slugify, tutorialAccessPayload, tutorialPublicPath, youtubeId } from './tutorialUtils.js';
+import { describeTutorialChanges, parseTimecode, slugify, tutorialAccessPayload, tutorialPublicPath, youtubeId } from './tutorialUtils.js';
 
-export { TUTORIAL_CHANGE_FIELDS, describeTutorialChanges, tutorialPublicPath, youtubeId } from './tutorialUtils.js';
+export { TUTORIAL_CHANGE_FIELDS, audienceLabel, changeImpact, changeValueLabel, describeTutorialChanges, formatTime, parseTimecode, tutorialPublicPath, youtubeId } from './tutorialUtils.js';
 
 const tutorialFields = 'id,title,slug,description,youtube_url,cover_url,cover_storage_path,status,access_mode,chapter_count,resource_count,created_at,updated_at';
 const chapterFields = 'id,tutorial_id,position,title,start_seconds,description,created_at,updated_at';
@@ -407,14 +407,22 @@ async function nextPosition(table, parentKey, parentId) {
   return (data?.position ?? -1) + 1;
 }
 
+// El panel envía el inicio en el mismo formato que ve el suscriptor.
+function chapterStartSeconds(value) {
+  const seconds = parseTimecode(value);
+  if (seconds === null) throw requestError('El inicio debe usar el formato de YouTube: 00:00, 12:30 o 1:02:03.');
+  return seconds;
+}
+
 async function createChapter(videoId, body) {
   const client = requireSupabase();
+  const startSeconds = chapterStartSeconds(body.startSeconds ?? 0);
   const position = await nextPosition('chapters', 'tutorial_id', videoId);
   const { data, error } = await client.from('chapters').insert({
     tutorial_id: videoId,
     position,
     title: String(body.title || 'Nuevo momento').trim(),
-    start_seconds: Math.max(0, Number(body.startSeconds || 0)),
+    start_seconds: startSeconds,
     description: String(body.description || '').trim(),
   }).select(chapterFields).single();
   throwIfError(error);
@@ -423,9 +431,10 @@ async function createChapter(videoId, body) {
 
 async function updateChapter(chapterId, body) {
   const client = requireSupabase();
+  const startSeconds = chapterStartSeconds(body.startSeconds);
   const { data, error } = await client.from('chapters').update({
     title: String(body.title || '').trim(),
-    start_seconds: Math.max(0, Number(body.startSeconds || 0)),
+    start_seconds: startSeconds,
     description: String(body.description || '').trim(),
   }).eq('id', chapterId).select(chapterFields).single();
   throwIfError(error);
@@ -822,13 +831,6 @@ export async function api(path, options = {}) {
   throw requestError(`Operación no soportada: ${method} ${path}`, 404);
 }
 
-export function formatTime(seconds = 0) {
-  const total = Number(seconds) || 0;
-  const hours = Math.floor(total / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const rest = total % 60;
-  return hours ? `${hours}:${String(minutes).padStart(2, '0')}:${String(rest).padStart(2, '0')}` : `${String(minutes).padStart(2, '0')}:${String(rest).padStart(2, '0')}`;
-}
 
 export async function copyText(text) {
   if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);

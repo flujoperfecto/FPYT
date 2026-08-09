@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { RESOURCE_LABELS, TUTORIAL_CHANGE_FIELDS, api, copyText, describeTutorialChanges, formatTime, tutorialPublicPath, youtubeId } from './api.js';
+import { RESOURCE_LABELS, TUTORIAL_CHANGE_FIELDS, api, audienceLabel, changeImpact, changeValueLabel, copyText, describeTutorialChanges, formatTime, tutorialPublicPath, youtubeId } from './api.js';
 import TurnstileSlot, { useTurnstile } from './Turnstile.jsx';
 import Mark from './BrandMark.jsx';
 import usePageMeta from './usePageMeta.js';
@@ -7,42 +7,6 @@ import usePageMeta from './usePageMeta.js';
 // Cambios que un suscriptor nota de inmediato: se revisan con más detalle.
 const criticalFields = ['slug', 'status', 'accessMode', 'youtubeUrl'];
 const editableFields = TUTORIAL_CHANGE_FIELDS.map(item => item.field);
-
-function audienceLabel(subscribers = 0) {
-  return subscribers === 1 ? '1 suscriptor' : `${subscribers} suscriptores`;
-}
-
-function changeValueLabel(field, value) {
-  if (field === 'status') return value === 'published' ? 'Publicado' : 'Borrador';
-  if (field === 'accessMode') return value === 'public' ? 'Público, sin email' : 'Solicita email';
-  if (!value) return 'sin definir';
-  if (field === 'slug') return `«${value}»`;
-  if (field === 'coverUrl') return value.startsWith('/images/') ? 'imagen predeterminada' : value.split('/').pop().split('?')[0];
-  return value.length > 64 ? `${value.slice(0, 61)}…` : value;
-}
-
-function changeImpact(change, { subscribers = 0, replacesManagedCover = false }) {
-  const audience = audienceLabel(subscribers);
-  if (change.field === 'title') return 'El título nuevo reemplaza al anterior en la biblioteca, en el aula y en la pestaña del navegador.';
-  if (change.field === 'slug') return `El enlace público cambia de dirección. La anterior seguirá funcionando: quien la abra será redirigido automáticamente${subscribers ? `, incluidos los ${audience} que ya la recibieron` : ''}.`;
-  if (change.field === 'status') {
-    return change.to === 'published'
-      ? 'El tutorial aparecerá en la biblioteca pública y su enlace quedará abierto.'
-      : `Desaparecerá de la biblioteca y ${audience} dejarán de abrir el aula hasta que vuelvas a publicarlo.`;
-  }
-  if (change.field === 'accessMode') {
-    return change.to === 'public'
-      ? 'Cualquiera abrirá los materiales sin dejar su correo: dejarás de capturar suscriptores nuevos en este tutorial.'
-      : `El enlace directo al aula pedirá correo antes de mostrar los materiales. Los ${audience} con acceso concedido lo conservan.`;
-  }
-  if (change.field === 'youtubeUrl') return 'Cambia el video del aula. Los momentos conservan sus segundos de inicio y pueden quedar desalineados con el video nuevo: revísalos antes de publicar.';
-  if (change.field === 'coverUrl') {
-    return replacesManagedCover
-      ? 'La portada nueva sustituye a la imagen que subiste, y esa imagen se eliminará de Storage.'
-      : 'Cambia la imagen en la biblioteca y en la portada de la página de acceso.';
-  }
-  return 'Cambia el resumen visible en la biblioteca y en la página de acceso.';
-}
 
 function Login({ onSuccess, initialError = '' }) {
   const [email, setEmail] = useState('');
@@ -115,7 +79,7 @@ function ChangeReviewDialog({ changes, context, onConfirm, onCancel }) {
       <header>
         <span>REVISIÓN DE CAMBIOS</span>
         <h2 id="review-title">Esto cambiará para <em>quien te lea.</em></h2>
-        <p>{changes.length === 1 ? '1 cambio' : `${changes.length} cambios`}{critical ? ` · ${critical === 1 ? '1 afecta el acceso' : `${critical} afectan el acceso`}` : ''} · {audienceLabel(context.subscribers)} en este tutorial.</p>
+        <p>{changes.length === 1 ? '1 cambio' : `${changes.length} cambios`}{critical ? ` · ${critical === 1 ? '1 afecta el acceso' : `${critical} afectan el acceso`}` : ''} · {context.subscribers ? `${audienceLabel(context.subscribers)} en este tutorial` : 'todavía sin suscriptores'}.</p>
       </header>
       <ul className="review-list">
         {changes.map(change => <li key={change.field} className={criticalFields.includes(change.field) ? 'critical' : ''}>
@@ -210,7 +174,7 @@ function ChapterTimeline({ selected, chapterId, busy, onSelectChapter, onAddChap
 function ChapterEditorPanel({ chapter, selectedId, busy, onSave, onDuplicate, onDelete, onReorderResource, onRemoveResource, onResourceCreated }) {
   return <section className="chapter-editor">
     <div className="chapter-tools"><button onClick={onDuplicate} disabled={Boolean(busy)}>{busy === 'duplicate-chapter' ? 'Duplicando…' : 'Duplicar momento'}</button><button className="danger" onClick={onDelete} disabled={Boolean(busy)}>Eliminar momento</button></div>
-    <form onSubmit={onSave}><div className="field-row"><label>Nombre del momento<input name="title" required defaultValue={chapter.title} key={`${chapter.id}-title`} /></label><label>Inicio (segundos)<input name="startSeconds" type="number" min="0" defaultValue={chapter.startSeconds} key={`${chapter.id}-time`} /></label></div><label>Descripción<input name="description" defaultValue={chapter.description} key={`${chapter.id}-desc`} /></label><button className="text-button" disabled={Boolean(busy)}>{busy === 'save-chapter' ? 'Guardando…' : 'Guardar momento'}</button></form>
+    <form onSubmit={onSave}><div className="field-row"><label>Nombre del momento<input name="title" required defaultValue={chapter.title} key={`${chapter.id}-title`} /></label><label>Inicio en el video<input name="startSeconds" inputMode="numeric" required placeholder="00:00" pattern="\d+(:\d{1,2}){0,2}" title="Usa el mismo formato que YouTube: 00:00, 12:30 o 1:02:03" defaultValue={formatTime(chapter.startSeconds)} key={`${chapter.id}-time`} /><small className="field-hint">Formato YouTube: 12:30 o 1:02:03</small></label></div><label>Descripción<input name="description" defaultValue={chapter.description} key={`${chapter.id}-desc`} /></label><button className="text-button" disabled={Boolean(busy)}>{busy === 'save-chapter' ? 'Guardando…' : 'Guardar momento'}</button></form>
     <div className="existing-resources"><div><span>RECURSOS ADJUNTOS</span><b>{chapter.resources.length}</b></div>{chapter.resources.map((item, index) => <article key={item.id}><span>{RESOURCE_LABELS[item.type]}</span><strong>{item.title}</strong><div className="resource-admin-actions"><button disabled={index === 0 || Boolean(busy)} aria-label={`Subir ${item.title}`} onClick={() => onReorderResource(index, -1)}>↑</button><button disabled={index === chapter.resources.length - 1 || Boolean(busy)} aria-label={`Bajar ${item.title}`} onClick={() => onReorderResource(index, 1)}>↓</button><button className="danger" disabled={Boolean(busy)} onClick={() => onRemoveResource(item.id)}>Eliminar</button></div></article>)}</div>
     <details className="add-resource" open><summary>Agregar material a este momento</summary><ResourceForm videoId={selectedId} chapterId={chapter.id} onCreated={onResourceCreated} /></details>
   </section>;
