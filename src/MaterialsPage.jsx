@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RESOURCE_LABELS, api, copyText, downloadResource, downloadTextFile, formatTime, safeFileName, youtubeId } from './api.js';
 import Mark from './BrandMark.jsx';
+import usePageMeta from './usePageMeta.js';
 
 const READABLE = ['prompt', 'instruction', 'skill'];
 const FILE_ICONS = { pdf: 'PDF', zip: 'ZIP', rar: 'ZIP', doc: 'DOC', docx: 'DOC', txt: 'TXT', md: 'MD', csv: 'CSV', xlsx: 'XLS', png: 'IMG', jpg: 'IMG', jpeg: 'IMG', webp: 'IMG', svg: 'SVG', mp3: 'AUD', mp4: 'VID', json: 'JSON' };
@@ -113,9 +114,11 @@ export default function MaterialsPage({ slug }) {
     });
   }, [slug]);
 
-  useEffect(() => {
-    document.title = video?.title ? `Materiales · ${video.title} — Flujo Perfecto` : 'Materiales del video — Flujo Perfecto';
-  }, [video?.title]);
+  usePageMeta({
+    title: video?.title ? `Materiales · ${video.title}` : 'Materiales del video',
+    description: video ? `Prompts, skills y archivos del video “${video.title}”, en el mismo orden en que aparecen.` : undefined,
+    path: `/materiales/${slug}`,
+  });
 
   const closeModal = useCallback(() => setOpenItem(null), []);
   const videoId = youtubeId(video?.youtubeUrl);

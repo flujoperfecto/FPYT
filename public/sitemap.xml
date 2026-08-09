@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Generado a mano por ahora: sólo incluye rutas estáticas estables.
+  Las rutas de tutoriales (/acceso/:slug, /hub/:slug) dependen de contenido
+  dinámico en Supabase y de la decisión de qué tutoriales son access_mode
+  "public" — no se listan aquí hasta que exista una generación de sitemap
+  en build time a partir de las publicaciones reales.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://www.flujoperfecto.com/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>

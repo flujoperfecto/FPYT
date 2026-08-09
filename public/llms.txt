@@ -1,0 +1,16 @@
+# Flujo Perfecto
+
+> Hub complementario del canal de YouTube Flujo Perfecto. Convierte cada tutorial en una experiencia guiada en español: prompts, instrucciones, skills y materiales descargables sincronizados con el video, enfocado en construir apps, agentes de IA y sistemas de automatización con herramientas como Claude Code, Claude Cowork y ChatGPT Codex.
+
+Idioma: español. Audiencia: creadores, builders y especialistas en automatización que aprenden construyendo, no sólo mirando.
+
+## Páginas principales
+
+- [Inicio](https://www.flujoperfecto.com/): biblioteca de tutoriales, Pulso IA (edición diaria de noticias de IA) y el método de trabajo del canal.
+- [Canal de YouTube](https://www.youtube.com/channel/UC2vUmW2oCGDGo2hooHMv09A): los videos completos que cada tutorial del hub acompaña.
+
+## Notas para agentes y motores generativos
+
+- El catálogo de tutoriales está creciendo; cada video nuevo se publica primero en YouTube y luego se incorpora al hub con su propia ruta `/acceso/:slug` o `/hub/:slug`.
+- Pulso IA se actualiza a diario con noticias de IA curadas y resumidas por DeepSeek a partir de fuentes oficiales y de prensa especializada.
+- Este archivo se actualizará a medida que se publiquen guías dedicadas a Claude Code, Claude Cowork, ChatGPT Codex y otras herramientas de construcción con IA.

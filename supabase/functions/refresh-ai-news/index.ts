@@ -14,7 +14,7 @@ import {
   type NewsCandidate,
 } from "./news.ts"
 
-const DEEPSEEK_MODEL = "deepseek-v4-pro"
+const DEEPSEEK_MODEL = "deepseek-v4-flash"
 const MIN_ACTIVE_SOURCES = 8
 const MIN_OFFICIAL_SOURCES = 5
 const MIN_MEDIA_SOURCES = 2
@@ -76,6 +76,21 @@ ${JSON.stringify(candidates.map(candidate => ({
   })))}`
 }
 
+function describeError(error: unknown): string {
+  if (error instanceof Error) return error.message || error.name || "unknown_error"
+  if (typeof error === "string") return error
+  if (error && typeof error === "object") {
+    const withMessage = error as { message?: unknown; code?: unknown }
+    if (typeof withMessage.message === "string" && withMessage.message) return withMessage.message
+    try {
+      return JSON.stringify(error)
+    } catch {
+      return "unknown_error"
+    }
+  }
+  return "unknown_error"
+}
+
 const RETRYABLE_MODEL_ERRORS = new Set([
   "deepseek_empty_content",
   "deepseek_invalid_json",
@@ -112,8 +127,7 @@ async function selectWithDeepSeek(candidates: NewsCandidate[], apiKey: string) {
               { role: "system", content: "Eres un editor de noticias preciso. Responde en español y emite exclusivamente JSON válido en el content final." },
               { role: "user", content: prompt },
             ],
-            thinking: { type: "enabled" },
-            reasoning_effort: "high",
+            thinking: { type: "disabled" },
             response_format: { type: "json_object" },
             max_tokens: 4_096,
           }),
@@ -137,12 +151,12 @@ async function selectWithDeepSeek(candidates: NewsCandidate[], apiKey: string) {
       validateModelSelection(parsed, candidates)
       return parsed
     } catch (error) {
-      const errorCode = error instanceof Error ? error.message.split(":", 1)[0] : "unknown_error"
+      const errorCode = describeError(error).split(":", 1)[0]
       if (!RETRYABLE_MODEL_ERRORS.has(errorCode)) throw error
       lastError = error
     }
   }
-  throw lastError instanceof Error ? lastError : new Error("deepseek_invalid_response")
+  throw lastError instanceof Error ? lastError : new Error(describeError(lastError) || "deepseek_invalid_response")
 }
 
 async function recentItems(supabase: ReturnType<typeof createClient>, today: string) {
@@ -226,7 +240,7 @@ Deno.serve(async request => {
     console.error("refresh-ai-news failed", error)
     return Response.json({
       error: "La edición no se actualizó; se conserva la última edición válida.",
-      code: error instanceof Error ? error.message : "unknown_error",
+      code: describeError(error),
     }, { status: 503 })
   }
 })

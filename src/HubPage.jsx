@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RESOURCE_LABELS, api, copyText, downloadResource, formatTime, youtubeId } from './api.js';
 import Mark from './BrandMark.jsx';
+import usePageMeta from './usePageMeta.js';
 
 let youtubeApiPromise;
 
@@ -112,6 +113,13 @@ export default function HubPage({ slug, preview = false }) {
   const cueTimerRef = useRef(0);
   const timelineRef = useRef(null);
 
+  usePageMeta({
+    title: video?.title,
+    description: video ? `${video.title}: aula interactiva con línea de tiempo, prompts y materiales, capítulo a capítulo.` : undefined,
+    path: `/hub/${slug}`,
+    noindex: preview,
+  });
+
   useEffect(() => {
     api(preview ? `/api/admin/preview/${slug}` : `/api/hub/${slug}`).then(data => {
       setVideo(data);
@@ -131,10 +139,6 @@ export default function HubPage({ slug, preview = false }) {
       else setError(errorValue.message);
     });
   }, [preview, slug]);
-
-  useEffect(() => {
-    document.title = video?.title ? `${video.title} — Aula Flujo Perfecto` : 'Preparando el aula — Flujo Perfecto';
-  }, [video?.title]);
 
   useEffect(() => {
     const item = timelineRef.current?.querySelector(`[data-chapter-index="${active}"]`);

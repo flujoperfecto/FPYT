@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { channelUrl, chapters } from './data.js';
 import { api, copyText } from './api.js';
 import Mark from './BrandMark.jsx';
+import usePageMeta from './usePageMeta.js';
 
 const Arrow = ({ diagonal = false }) => <span aria-hidden="true">{diagonal ? '↗' : '→'}</span>;
 
@@ -628,6 +629,9 @@ function NewsDrawer({ item, onClose }) {
 export default function App() {
   const [selected, setSelected] = useState(null);
   const [selectedNews, setSelectedNews] = useState(null);
-  useEffect(() => { document.title = 'Flujo Perfecto — Diseña sistemas con IA que trabajan por ti'; }, []);
+  usePageMeta({
+    description: 'Tutoriales en español para construir con IA: Claude Code, agentes de IA y automatización, con prompts y sistemas listos para usar.',
+    path: '/',
+  });
   return <><a className="skip-link" href="#contenido">Saltar al contenido</a><PageEffects /><Header /><main id="contenido"><Hero /><TechnologyStrip /><Library /><AiNewsTicker onOpen={setSelectedNews} /><Classroom onOpen={setSelected} /><Method /><FinalCta /></main><Footer /><ResourceDrawer item={selected} onClose={() => setSelected(null)} /><NewsDrawer item={selectedNews} onClose={() => setSelectedNews(null)} /></>;
 }
